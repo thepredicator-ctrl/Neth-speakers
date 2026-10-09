@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Pin PostCSS to an empty inline config: the design system uses plain CSS, and this
+  // prevents Vite from walking up the directory tree and picking up unrelated
+  // postcss.config files from parent folders (breaks vitest/build in monorepo-like setups).
+  css: { postcss: {} },
   server: {
     port: 3000,
     host: true,
