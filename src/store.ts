@@ -205,6 +205,9 @@ export const useApp = create<AppState>((set, get) => {
       set({
         driver: driverS,
         enclosure: sanitizeEnclosure({ ...get().enclosure, ...enclosure }, driverS),
+        amplifier: preset?.amplifier
+          ? sanitizeAmplifier({ ...get().amplifier, ...preset.amplifier })
+          : get().amplifier,
         projectName: preset ? preset.name : get().projectName,
         currentProjectId: null,
       });

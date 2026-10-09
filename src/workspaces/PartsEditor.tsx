@@ -191,6 +191,13 @@ export function PartsEditor() {
               <Param label="Mounting holes" value={driver.frame.mountingHoles} min={4} max={8} step={1} digits={0} onChange={(v) => patch.frame({ mountingHoles: Math.round(v) })} />
               <Sel label="Frame material" value={driver.frame.materialId} options={matOpts(['frame', 'custom'])} onChange={(v) => patch.frame({ materialId: v })} />
               <Sel label="Basket style" value={driver.frame.style} options={[{ value: 'stamped', label: 'Stamped steel' }, { value: 'diecast', label: 'Die-cast' }]} onChange={(v) => patch.frame({ style: v as typeof driver.frame.style })} />
+              <Sel
+                label="Motor boot"
+                value={driver.frame.boot == null ? 'auto' : driver.frame.boot ? 'on' : 'off'}
+                options={[{ value: 'auto', label: 'Auto (subwoofer class)' }, { value: 'on', label: 'Show rubber boot' }, { value: 'off', label: 'Exposed motor' }]}
+                onChange={(v) => patch.frame({ boot: v === 'auto' ? null : v === 'on' })}
+                hint="Rubber cover over the magnet stack (SPL-sub style). Auto shows it on large/long-throw drivers."
+              />
               <Toggle label="Front gasket ring" value={driver.frame.gasket} onChange={(v) => patch.frame({ gasket: v })} />
               <div className="param"><label>Frame color</label>
                 <input type="color" value={driver.frame.color} onChange={(e) => patch.frame({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />

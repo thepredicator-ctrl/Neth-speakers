@@ -61,7 +61,18 @@ export function Viewport3D(props: {
   }, [props.showEnclosure, props.wallOpacity, enclosure, driver]);
   useEffect(() => { sceneRef.current?.setVizScale(props.vizScale ?? vizScaleOf(audioRef.current)); }, [props.vizScale, audio.vizMode, audio.vizMultiplier]);
   useEffect(() => { sceneRef.current?.setSmoothing(vizSmoothing); }, [vizSmoothing]);
-  useEffect(() => { if (props.viewRequest) sceneRef.current?.setView(props.viewRequest.v); }, [props.viewRequest]);
+  // view requests are edge-triggered: `n` is a counter, so the camera moves
+  // ONLY when a new request arrives — otherwise every parent re-render (the
+  // ~30 fps HUD tick) would reset the free-angle orbit mid-drag.
+  const lastViewRef = useRef<string>('');
+  useEffect(() => {
+    const req = props.viewRequest;
+    if (!req) return;
+    const key = `${req.v}:${req.n}`;
+    if (key === lastViewRef.current) return;
+    lastViewRef.current = key;
+    sceneRef.current?.setView(req.v);
+  }, [props.viewRequest]);
   useEffect(() => { sceneRef.current?.setExploded(props.exploded ?? 0); }, [props.exploded]);
   useEffect(() => { sceneRef.current?.setSection(props.section ?? null); }, [props.section]);
   useEffect(() => { if (props.quality) sceneRef.current?.setQuality(props.quality); }, [props.quality]);

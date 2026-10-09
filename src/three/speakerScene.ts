@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildDriver, buildEnclosure, type DriverGeometry, type EnclosureGeometry } from './geometry';
 import type { DriverParams, EnclosureParams, MaterialDef } from '../physics/types';
 
-export type ViewName = 'persp' | 'front' | 'side' | 'rear';
+export type ViewName = 'persp' | 'front' | 'side' | 'rear' | 'recenter';
 export type Quality = 'low' | 'med' | 'high';
 
 export interface SceneOptions {
@@ -113,6 +113,7 @@ export class SpeakerScene {
   }
 
   setView(v: ViewName): void {
+    if (v === 'recenter') { this.frameView(); return; }
     const d = this.fitDistance() * 1.25;
     const target = new THREE.Vector3(0, -this.driverHeight() * 0.35, 0);
     if (v === 'front') this.camera.position.set(0.001, d + target.y, 0.001);

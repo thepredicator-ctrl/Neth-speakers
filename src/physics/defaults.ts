@@ -91,6 +91,7 @@ export function defaultDriver(): DriverParams {
       color: '#33363c',
       style: 'stamped',
       gasket: true,
+      boot: null,               // auto: on for subwoofer-class drivers
     },
     blDropAtXmech: 0.25,
     kmsRiseAtXmax: 0.6,
@@ -162,7 +163,11 @@ export function defaultSim(): SimSettings {
  * Example designs ("demo drivers") — immediately usable, documented examples.
  * ------------------------------------------------------------------------- */
 
-export interface PresetDef { id: string; name: string; blurb: string; make: (base: DriverParams) => DriverParams; enclosure?: Partial<EnclosureParams> }
+export interface PresetDef {
+  id: string; name: string; blurb: string; make: (base: DriverParams) => DriverParams;
+  enclosure?: Partial<EnclosureParams>;
+  amplifier?: Partial<AmplifierParams>;   // sane drive level for this design
+}
 
 export const PRESETS: PresetDef[] = [
   {
@@ -220,6 +225,46 @@ export const PRESETS: PresetDef[] = [
       return d;
     },
     enclosure: { type: 'sealed', internalWidth: 300, internalHeight: 340, internalDepth: 260 },
+  },
+  {
+    id: 'x12v2', name: 'Sundown X-12 v.2 D2 (12″ SPL sub)',
+    blurb: 'Published-spec SPL monster: 30 mm one-way Xmax, 1500 W RMS, 3″ coil, boot motor. Series coils (3.8 Ω).',
+    make: (b) => {
+      const d = clone(b);
+      // geometry — real X-12 v.2 proportions (12″, 3.0″ coil, vented gap)
+      d.cone.outerDiameter = 240; d.cone.depth = 66; d.cone.thickness = 2.4;
+      d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1c1e22';
+      d.cone.dustCapDiameter = 112; d.cone.dustCapShape = 'dome'; d.cone.dustCapMass = 30;
+      d.cone.mass = 170;           // g — composite cone + glass roving
+      d.surround.innerDiameter = 240; d.surround.outerDiameter = 280;
+      d.surround.rollHeight = 25; d.surround.rollWidth = 20;
+      d.surround.stiffness = 2750; d.surround.damping = 1.5; d.surround.materialId = 'rubber-nbr';
+      d.spider.innerDiameter = 72.5; d.spider.outerDiameter = 172;
+      d.spider.corrugations = 12; d.spider.corrDepth = 7.5;
+      d.spider.stiffness = 15800; d.spider.damping = 2.4; d.spider.materialId = 'spider-nomex';
+      d.coil.formerDiameter = 71.0; d.coil.windingDiameter = 72.3; d.coil.formerHeight = 100;
+      d.coil.wireDiameter = 0.55; d.coil.layers = 4; d.coil.turnsPerLayer = 40;
+      d.coil.windingHeight = 72;   // → Xmax = (72 − 12)/2 = 30 mm one-way
+      d.coil.formerMaterialId = 'former-alu'; d.coil.mass = 120;
+      d.coil.re = 3.8;             // Ω — D2 coils in series (published Re)
+      d.magnet.materialId = 'ferrite-y35';
+      d.magnet.poleDiameter = 70.0; d.magnet.topPlateDiameter = 200; d.magnet.topPlateThickness = 12;
+      d.magnet.diameter = 220; d.magnet.innerDiameter = 100; d.magnet.thickness = 32; d.magnet.count = 2;
+      d.magnet.backPlateDiameter = 220; d.magnet.backPlateThickness = 20; d.magnet.gapWidth = 2.5;
+      d.magnet.bl = 26.5;          // T·m — from published Qes/Fs/Re (self-consistent)
+      d.frame.depth = 175; d.frame.style = 'diecast'; d.frame.boot = true; d.frame.tinselLeads = 4;
+      d.frame.color = '#2b2e33';
+      d.qmsTarget = 6.3;           // → Qms ≈ 4.9 published
+      d.xmaxOverride = 30;         // mm one-way (published, 70 % Bl criterion ≈ linear here)
+      d.powerHandlingW = 1500;
+      return d;
+    },
+    enclosure: {
+      type: 'ported', internalWidth: 460, internalHeight: 500, internalDepth: 320,
+      port: { shape: 'round', diameter: 102, length: 330, count: 1, flared: true, slotWidth: 60, slotHeight: 300 },
+      damping: 'lightFill', bracingVolume: 0.9,
+    },
+    amplifier: { driveMode: 'power', powerW: 900, clipEnabled: true, clipVoltageRms: 75, currentLimitA: 0 },
   },
   {
     id: 'neth18pr', name: 'Neth-18 PR Sub (18″ + passive radiator)',

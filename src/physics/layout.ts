@@ -68,6 +68,20 @@ export interface DriverLayout {
   yFrameSeat: number;       // frame flange top face (surround outer landing)
   yFrameRear: number;       // frame rear ring anchor
 
+  /* ---- cone centre style anchors (Sundown-type shoulder + dome) ---- */
+  rCap: number;         // dust dome edge radius (bonds to shoulder)
+  rShoulder: number;    // flat shoulder outer radius (meets the cone body)
+  yShoulder: number;    // shoulder/dome seat plane (on the cone surface line)
+  capH: number;         // dome sagitta (m) above the shoulder plane
+
+  /* ---- motor boot + basket leg anchors ---- */
+  boot: boolean;        // render the rubber motor boot
+  rBoot: number;        // boot outer radius (clears magnet + back plate)
+  yBootTop: number;     // boot top face (just under the exposed top-plate ring)
+  yBootBottom: number;  // boot bottom (below back plate, rounded)
+  rLegFoot: number;     // basket leg foot radius (lands on the plate/boot rim)
+  yLegFoot: number;     // basket leg foot plane (boot top / plate rim)
+
   /* ---- derived stats (SI) ---- */
   windH: number;         // winding height (m)
   gapH: number;          // magnetic gap height (m)
@@ -188,8 +202,37 @@ export function computeLayout(d: DriverParams): DriverLayout {
   );
 
   const yShelfTop = ySpider;                                     // spider seated on shelf
-  const yFrameSeat = ySeat + 1.4e-3;                             // flange top face
+  // The flange seat rides PROUD of the cone seat for tall rolls (wide-roll
+  // subwoofer surrounds land above the baffle plane); small rolls keep the
+  // classic flush 1.4 mm step.
+  const rollHeightM = Math.max(0.5e-3, mm2m(d.surround.rollHeight));
+  const yFrameSeat = ySeat + Math.max(1.4e-3, 0.62 * rollHeightM);
   const yFrameRear = yBackBottom + backThk * 0.4;
+
+  /* ---- cone centre: flat shoulder + raised dome (attached, no gaps) ---- */
+  const spanOut = rConeOut - rFormerOut;
+  const rCap = Math.min(
+    Math.max(mm2m(d.cone.dustCapDiameter) / 2, rFormerOut + 0.08 * spanOut),
+    rFormerOut + 0.72 * spanOut,
+  );
+  const rShoulder = Math.min(
+    rCap + Math.max(4e-3, 0.30 * (rConeOut - rCap)),
+    rConeOut - Math.max(3e-3, 0.12 * spanOut),
+  );
+  // shoulder sits ON the cone body surface line (flush, never floating)
+  const coneSlope = (ySeat - yConeInner) / Math.max(1e-6, rConeOut - rFormerOut);
+  const yShoulder = ySeat - (rConeOut - rShoulder) * coneSlope;
+  const capH = 0.48 * rCap;                                      // dome sagitta
+
+  /* ---- motor boot (rubber cover over the stack) + leg feet ---- */
+  const bootAuto = mm2m(d.cone.outerDiameter) >= 0.2 || rollHeightM >= 0.012;
+  const boot = d.frame.boot == null ? bootAuto : d.frame.boot;
+  const rBoot = Math.max(rBackOD, rMagOD) + 1.5e-3;
+  const stackDepth = yTopPlateBottom - yBackBottom;
+  const yBootTop = yTopPlateBottom - 0.5e-3;
+  const yBootBottom = yBackBottom - Math.max(3e-3, 0.14 * stackDepth);
+  const rLegFoot = Math.max(rTopOD, rBoot * 0.82);
+  const yLegFoot = boot ? yBootTop : yTopPlateBottom - 0.5e-3;
 
   /* ---- geometric excursion limits ---- */
   const spiderClear = Math.max(0, ySpider - yTopPlateTop - PLATE_CLEAR);
@@ -205,6 +248,8 @@ export function computeLayout(d: DriverParams): DriverLayout {
     yWindTop, yWindBottom, yWindC, yGapC,
     yTopPlateTop, yTopPlateBottom, yMagTop, yMagBottom, yBackTop, yBackBottom,
     ySpider, yShelfTop, yFrameSeat, yFrameRear,
+    rCap, rShoulder, yShoulder, capH,
+    boot, rBoot, yBootTop, yBootBottom, rLegFoot, yLegFoot,
     windH, gapH, overhang, XmaxGeo, XmechGeo, maxDown, maxUp,
     spiderClear, formerClear, surroundLimit, bondDrop, glueGap,
     xmechTarget: target, requiredFormerH, requiredMagStack,
@@ -246,7 +291,7 @@ export function surroundProfile(
   for (let i = 0; i <= nMid; i++) {             // roll arc(s)
     const u = i / nMid;
     const t = tabIn + (1 - tabIn - tabOut) * u;
-    const phase = u * rolls * Math.PI;          // 0..π per roll
+    const phase = Math.pow(u, 1.18) * rolls * Math.PI;   // crest biased outward
     const r = L.rSurfIn + span * t;
     const base = y0 + (y1 - y0) * u;
     pts.push([r, base + rollHeightM * squash * Math.sin(phase)]);

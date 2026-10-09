@@ -198,6 +198,12 @@ export function sanitizeFrame(f: FrameParams, minDepthMM?: number): FrameParams 
     color: hexColor((f as { color?: unknown }).color, '#33363c'),
     style: str((f as { style?: unknown }).style, ['stamped', 'diecast'] as const, 'stamped'),
     gasket: (f as { gasket?: unknown }).gasket !== false,
+    // tri-state: true/false = user choice, null = auto (subwoofer class, layout.ts)
+    boot: (f as { boot?: unknown }).boot === true
+      ? true
+      : (f as { boot?: unknown }).boot === false
+        ? false
+        : null,
   };
 }
 

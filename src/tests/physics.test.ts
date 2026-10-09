@@ -341,10 +341,11 @@ describe('Audio sync clock', () => {
     const clock = new SyncClock();
     clock.play(0, 0);
     clock.pushSample(0.002, 0.05, 5.0);
-    expect(clock.renderDisplacement(5.01)).toBeCloseTo(0.002 + 0.05 * 0.01, 12);
-    // dt capped at the ~2-message horizon (22 ms) so extrapolation cannot
-    // visibly overshoot the true trajectory between worklet messages
-    expect(clock.renderDisplacement(5.5)).toBeCloseTo(0.002 + 0.05 * 0.022, 12);
+    expect(clock.renderDisplacement(5.01)).toBeCloseTo(0.002 + 0.05 * 0.003, 12);
+    // dt capped at the jitter-bridge horizon (3 ms): extrapolating across a
+    // whole ~10.7 ms message period phase-advances the cone by v·Δt — tens of
+    // mm on a high-excursion driver — and pins the readout to the rail
+    expect(clock.renderDisplacement(5.5)).toBeCloseTo(0.002 + 0.05 * 0.003, 12);
     expect(clock.healthy(5.1)).toBe(true);
     expect(clock.healthy(5.9)).toBe(false);
   });

@@ -126,6 +126,26 @@ describe('assembly invariants (all drivers)', () => {
         expect(L.maxDown).toBeGreaterThan(0);
         expect(L.XmechGeo).toBeCloseTo(Math.min(L.maxDown, L.maxUp), 12);
       });
+
+      it('dust dome is seated on the cone shoulder (no floating cap)', () => {
+        // shoulder plane lies ON the straight cone body line
+        const slope = (L.ySeat - L.yConeInner) / (L.rConeOut - L.rConeIn);
+        expect(L.yShoulder).toBeCloseTo(L.ySeat - (L.rConeOut - L.rShoulder) * slope, 9);
+        // dome edge lands exactly on the shoulder, dome rises above it
+        expect(L.rCap).toBeLessThan(L.rShoulder);
+        expect(L.capH).toBeGreaterThan(0);
+        // shoulder is inside the cone body span
+        expect(L.rShoulder).toBeGreaterThan(L.rConeIn);
+        expect(L.rShoulder).toBeLessThan(L.rConeOut);
+      });
+
+      it('motor boot clears the stack and the legs land on the rim', () => {
+        expect(L.rBoot).toBeGreaterThanOrEqual(Math.max(L.rMagOD, L.rBackOD) / 2 + 1e-3);
+        expect(L.rLegFoot).toBeLessThanOrEqual(L.rBoot + 1e-9);
+        expect(L.yBootTop).toBeLessThan(L.yTopPlateBottom + 1e-9);
+        expect(L.yBootBottom).toBeLessThan(L.yBackBottom);
+        expect(L.yLegFoot).toBeLessThan(L.yShelfTop);          // feet sit below the shelf, on the motor rim
+      });
     });
   }
 });
@@ -151,5 +171,48 @@ describe('auto-balance repairs broken inputs into coherent assemblies', () => {
     const s = sanitizeDriver(d);
     // surround roll grown so the geometry can actually deliver 20 mm
     expect(s.surround.rollHeight * 1.25).toBeGreaterThanOrEqual(20 - 1e-6);
+  });
+});
+
+describe('Sundown X-12 v.2 D2 preset — published-spec contract', () => {
+  const s = sanitizeDriver(applyPreset('x12v2').driver);
+  const ts = computeTS(s, mats);
+  const L = computeLayout(s);
+
+  it('Xmax is the published 30 mm one-way (and the geometry delivers it)', () => {
+    expect(ts.Xmax).toBeGreaterThanOrEqual(29.8);
+    expect(ts.Xmax).toBeLessThanOrEqual(30.2);
+    expect(ts.Xmech).toBeGreaterThanOrEqual(ts.Xmax);
+    expect(L.maxUp).toBeGreaterThanOrEqual(ts.Xmax * 1e-3 - 1e-9);
+    expect(L.maxDown).toBeGreaterThanOrEqual(ts.Xmax * 1e-3 - 1e-9);
+  });
+
+  it('electrical + small-signal specs land on the published sheet', () => {
+    expect(ts.Re).toBeCloseTo(3.8, 1);           // D2 series
+    expect(ts.Bl).toBeCloseTo(26.5, 1);
+    expect(ts.Fs).toBeGreaterThan(30);           // published 36.1 Hz (geometry-derived, ±15 %)
+    expect(ts.Fs).toBeLessThan(42);
+    expect(ts.Qts).toBeGreaterThan(0.33);
+    expect(ts.Qts).toBeLessThan(0.5);            // published 0.41
+    expect(ts.sens).toBeGreaterThan(82);          // published 84.4 dB / 1W / 1m
+    expect(ts.sens).toBeLessThan(87);
+  });
+
+  it('Vd matches Sd × 30 mm and the peak-to-peak travel is 60 mm', () => {
+    expect(ts.Vd).toBeCloseTo(ts.Sd * 0.030, 12);
+    expect(ts.XmaxPP).toBeCloseTo(60, 9);
+  });
+
+  it('excursion at rated power is real movement, not a thumbnail', () => {
+    // 900 W into ~3.8 Ω → ~58.6 Vrms → 82.9 Vpeak; at 36 Hz near Fs the
+    // linear model must predict excursion comparable to the 30 mm Xmax.
+    const vpeak = Math.sqrt(900 * 3.8) * Math.SQRT2;
+    const w = 2 * Math.PI * 36.1;
+    // quasi-static peak: x ≈ Bl·V /(√((K−Mω²)² + (Rω)²)) · 1/Re ... use the
+    // standard force-factor form with the model's own parameters:
+    const k = ts.Kms - ts.Mms * w * w;
+    const c = ts.Rms;
+    const xpk = (ts.Bl * vpeak / ts.Re) / Math.sqrt(k * k + c * c * w * w);
+    expect(xpk * 1e3).toBeGreaterThan(15);       // tens of mm, not 1–2 mm
   });
 });

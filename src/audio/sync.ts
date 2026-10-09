@@ -48,15 +48,18 @@ export class SyncClock {
   }
 
   /**
-   * Render-time displacement: extrapolate from the newest worklet message
-   * using velocity — keeps the cone smooth between message arrivals and
-   * inherently locked to the audio clock (same timebase). The horizon is
-   * ~2 worklet message periods (~10.7 ms apart): long enough to bridge
-   * jitter, short enough that velocity extrapolation cannot visibly
-   * overshoot the true trajectory at low frequencies. The engine further
-   * clamps the result to the mechanical envelope.
+   * Render-time displacement from the newest worklet message.
+   *
+   * The velocity extrapolation horizon is deliberately TINY (~3 ms): its only
+   * job is to bridge jitter between the ~10.7 ms worklet messages. Bridges
+   * that span a full message period phase-advance the cone by up to v·Δt —
+   * tens of millimetres on a high-excursion subwoofer at low frequencies —
+   * which visually pins the readout to the mechanical rail while the model is
+   * nowhere near it. A few milliseconds of constant display latency is
+   * invisible (the Web Audio output path adds more); amplitude distortion is
+   * not. The engine additionally clamps the result to the mechanical envelope.
    */
-  renderDisplacement(ctxTime: number, dtMax = 0.022): number {
+  renderDisplacement(ctxTime: number, dtMax = 0.003): number {
     if (!this.sample) return 0;
     const dt = Math.min(Math.max(ctxTime - this.sample.t, 0), dtMax);
     return this.sample.x + this.sample.v * dt;

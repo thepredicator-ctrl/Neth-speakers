@@ -243,9 +243,9 @@ export function AudioLab() {
               onChange={(v) => patchAmplifier({ driveMode: v as typeof amplifier.driveMode })}
             />
             {amplifier.driveMode === 'voltage' ? (
-              <Param label="Output voltage" value={amplifier.voltageRms} min={0.1} max={60} step={0.1} digits={2} unit="Vrms" badge="user" onChange={(v) => patchAmplifier({ voltageRms: v })} />
+              <Param label="Output voltage" value={amplifier.voltageRms} min={0.1} max={150} step={0.1} digits={2} unit="Vrms" badge="user" onChange={(v) => patchAmplifier({ voltageRms: v })} />
             ) : (
-              <Param label="Output power" value={amplifier.powerW} min={0.1} max={1000} step={0.5} digits={1} unit="W" badge="user" onChange={(v) => patchAmplifier({ powerW: v })} hint="Power is converted to drive voltage via the ACTUAL load impedance" />
+              <Param label="Output power" value={amplifier.powerW} min={0.1} max={3000} step={1} digits={0} unit="W" badge="user" onChange={(v) => patchAmplifier({ powerW: v })} hint="Power is converted to drive voltage via the ACTUAL load impedance" />
             )}
             <div className="note mono" style={{ margin: '2px 0 8px' }}>
               → {amp.vpeak.toFixed(2)} V peak (±) · P = {amp.estimatedPowerW.toFixed(2)} W RMS / {amp.estimatedPowerPeakW.toFixed(1)} W peak

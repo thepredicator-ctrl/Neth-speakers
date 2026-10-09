@@ -97,6 +97,7 @@ export interface FrameParams {
   color: string;          // hex, 3D model
   style: 'stamped' | 'diecast';  // basket visual style
   gasket: boolean;        // show gasket ring
+  boot: boolean | null;   // motor boot (rubber cover); null = auto (subwoofer class)
 }
 
 export interface DriverParams {

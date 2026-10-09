@@ -6,15 +6,22 @@
  * Attachments are exact at every excursion:
  *   cone outer edge ↔ surround inner edge (shared seat plane)
  *   surround outer edge ↔ frame flange seat (flat landing tab)
- *   cone inner edge ↔ voice-coil former top (glue lip)
+ *   cone inner edge ↔ voice-coil former top (bonded, neck curve)
+ *   dust dome edge ↔ cone flat shoulder (shared plane)
  *   spider inner edge ↔ former outer wall (same radius, rides with x)
  *   spider outer edge ↔ basket shelf (fixed seat)
  *   winding straddles the magnetic gap (gap centre == winding centre)
+ *   basket legs land on the shelf ring and on the motor/top-plate rim
+ *   motor boot wraps the stack (top face under the plate ring, bottom below)
  *
  * Cone/dust-cap/coil/former move rigidly with displacement; the surround and
  * spider are re-lathed each frame from displacement-dependent profiles whose
  * endpoints never detach; tinsel leads bond to the former and land on the
  * terminals. Axis: +Y forward, y = 0 baffle plane, motor below. Units: metres.
+ *
+ * Driver styling follows the reference build (Sundown X-series class):
+ * deep straight cone, flat radial shoulder, raised logo dome, wide outward
+ * half-roll surround, tall 8-leg basket, rubber motor boot, race terminals.
  */
 import * as THREE from 'three';
 import type { DriverParams, EnclosureParams } from '../physics/types';
@@ -107,44 +114,75 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     side: THREE.DoubleSide,
   });
   const paintedMat = new THREE.MeshStandardMaterial({ color: '#191a1d', roughness: 0.7, metalness: 0.25, side: THREE.DoubleSide });
+  const bootMat = new THREE.MeshStandardMaterial({ color: '#101114', roughness: 0.92, metalness: 0.02, side: THREE.DoubleSide });
   const plateMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : steelMat;
   const poleUseMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : poleMat;
 
-  /* ---------- cone (inner edge bonded to former, outer to surround) ---------- */
+  /* ---------- cone: former bond → concave neck → shoulder → straight body ---------- */
+  // Profile (r, y), centre→out. The body runs from the shoulder corner to the
+  // surround seat; the neck blends the shoulder region down to the former top
+  // so the bond is a visible, continuous surface (nothing floats).
   const coneMatMesh = surf(p.cone.color, p.cone.finish, 0.04);
+  const tuck = mm2m(0.7);
   const coneProfile: [number, number][] = [];
-  const nC = 16;
-  for (let i = 0; i <= nC; i++) {
+  coneProfile.push([Math.max(1e-4, L.rConeIn - tuck), L.yConeInner - tuck]); // glue tuck behind former wall
+  coneProfile.push([L.rConeIn, L.yConeInner]);                                // bonded: former top
+  // concave neck (cove) from the former bond up to the shoulder corner
+  const nN = 8;
+  const c1R = L.rConeIn + 0.30 * (L.rShoulder - L.rConeIn);
+  const c1Y = L.yConeInner + 0.10 * (L.yShoulder - L.yConeInner);
+  for (let i = 1; i <= nN; i++) {
+    const t = i / nN;
+    const mt = 1 - t;
+    const r = mt * mt * L.rConeIn + 2 * mt * t * c1R + t * t * L.rShoulder;
+    const y = mt * mt * L.yConeInner + 2 * mt * t * c1Y + t * t * L.yShoulder;
+    coneProfile.push([r, y]);
+  }
+  // straight (or styled) body from the shoulder to the surround seat
+  const nC = 18;
+  for (let i = 1; i <= nC; i++) {
     const t = i / nC;
-    const r = L.rConeIn + (L.rConeOut - L.rConeIn) * t;
-    let y = L.yConeInner + (L.ySeat - L.yConeInner) * (p.cone.profile === 'curved' ? Math.pow(t, 0.78) : t);
+    const r = L.rShoulder + (L.rConeOut - L.rShoulder) * t;
+    let y = L.yShoulder + (L.ySeat - L.yShoulder) * (p.cone.profile === 'curved' ? Math.pow(t, 0.86) : t);
     if (p.cone.profile === 'ribbed') {
-      y += Math.sin(t * Math.PI * 8) * mm2m(0.7) * (1 - t * 0.4);
+      y += Math.sin(t * Math.PI * 7) * mm2m(0.7) * (1 - t * 0.35);
     }
     coneProfile.push([r, y]);
   }
-  // glue lip: small return flange that wraps the former top — visible bond
-  coneProfile.unshift([L.rFormerOut - mm2m(0.6), L.yConeInner - mm2m(0.6)]);
+  // rim curl under the surround root (clean seat edge, no sliver gap)
+  coneProfile.push([L.rConeOut + mm2m(0.4), L.ySeat - mm2m(0.5)]);
   const cone = lathe(coneProfile, seg, coneMatMesh);
   moving.add(cone);
 
-  /* ---------- dust cap (rides with the cone) ---------- */
-  const rCap = mm2m(p.cone.dustCapDiameter) / 2;
+  /* ---------- dust dome: flat land + raised dome, seated on the shoulder ---------- */
   const capProfile: [number, number][] = [];
-  const nD = 12;
-  const capH = p.cone.dustCapShape === 'flat' ? mm2m(1.2) : rCap * 0.62 * (p.cone.dustCapShape === 'inverted' ? -1 : 1);
-  for (let i = 0; i <= nD; i++) {
-    const t = i / nD;
-    const r = rCap * (1 - t);
-    const y = L.yConeInner + mm2m(1.0) + capH * (1 - Math.pow(1 - t, 2) * 0.35) * Math.sin(t * Math.PI / 2);
-    capProfile.push([Math.max(r, 1e-4), y]);
+  capProfile.push([L.rShoulder, L.yShoulder]);                 // outer land on the cone shoulder
+  capProfile.push([L.rCap, L.yShoulder]);                      // flat annulus
+  if (p.cone.dustCapShape === 'inverted') {
+    const nD = 14;
+    for (let i = 1; i <= nD; i++) {
+      const u = i / nD;
+      const r = L.rCap * (1 - u);
+      const y = L.yShoulder + mm2m(0.6) - L.capH * 0.45 * Math.sqrt(Math.max(0, 1 - Math.pow(u, 2.2)));
+      capProfile.push([Math.max(r, 1e-4), y]);
+    }
+  } else if (p.cone.dustCapShape === 'flat') {
+    capProfile.push([mm2m(2), L.yShoulder + mm2m(1.2)]);
+    capProfile.push([1e-4, L.yShoulder + mm2m(1.2)]);
+  } else {
+    // raised dome (superellipse — full sides, slightly flattened logo pad)
+    const nD = 18;
+    for (let i = 1; i <= nD; i++) {
+      const u = i / nD;
+      const r = L.rCap * (1 - u);
+      const y = L.yShoulder + L.capH * Math.sqrt(Math.max(0, 1 - Math.pow(u, 2.2)));
+      capProfile.push([Math.max(r, 1e-4), y]);
+    }
   }
-  capProfile.unshift([rCap, L.yConeInner + mm2m(1.0)]);
   const dustCap = lathe(capProfile, seg, surf(coneMatDef_color(p), p.cone.finish === 'gloss' ? 'satin' : 'matte', 0.05));
   moving.add(dustCap);
 
   /* ---------- voice coil: former + winding straddling the gap ---------- */
-  const fT = L.rFormerOut - L.rFormer;
   const former = new THREE.Mesh(
     new THREE.CylinderGeometry(L.rFormerOut, L.rFormerOut, L.yFormerTop - L.yFormerBottom, seg, 1, true),
     formerMat
@@ -208,6 +246,27 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   ], seg, plateMat);
   staticParts.add(backPlate);
 
+  /* ---------- motor boot (rubber cover over the stack) ---------- */
+  if (L.boot) {
+    const rb = L.rBoot;
+    const h = L.yBootTop - L.yBootBottom;
+    const rC = Math.min(rb * 0.16, h * 0.28);
+    const bp: [number, number][] = [];
+    bp.push([rb * 0.28, L.yBootTop]);                 // top face (under the plate ring)
+    bp.push([rb, L.yBootTop]);                        // top outer edge
+    bp.push([rb, L.yBootBottom + rC]);                // straight wall
+    for (let i = 1; i <= 6; i++) {                    // rounded bottom corner
+      const a = (i / 6) * Math.PI / 2;
+      bp.push([rb - rC * (1 - Math.sin(a)), L.yBootBottom + rC - rC * (1 - Math.cos(a))]);
+    }
+    bp.push([rb * 0.55, L.yBootBottom]);              // bottom face
+    bp.push([rb * 0.30, L.yBootBottom - h * 0.06]);   // centre vents down (pole vent)
+    bp.push([mm2m(2), L.yBootBottom - h * 0.075]);
+    const bootMesh = lathe(bp, seg, bootMat);
+    bootMesh.userData.explodedGroup = 'motor';
+    staticParts.add(bootMesh);
+  }
+
   /* ---------- frame / basket ---------- */
   const flangeW = mm2m(7);
   const frontFlange = lathe([
@@ -231,36 +290,6 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     staticParts.add(gasket);
   }
 
-  // struts: tapered basket legs from the flange underside down to the rear
-  // ring — oriented along the actual connection line so they always connect.
-  const nStruts = (p.frame as { style?: string }).style === 'diecast' ? 5 : 6;
-  const legW = (p.frame as { style?: string }).style === 'diecast' ? mm2m(14) : mm2m(9);
-  const yLegTop = L.yFrameSeat - flangeW;
-  const rLegTop = L.rFrameOut - mm2m(4);
-  const rLegBot = L.rBackOD + mm2m(6);
-  for (let i = 0; i < nStruts; i++) {
-    const ang = (i / nStruts) * Math.PI * 2 + Math.PI / nStruts;
-    const a = new THREE.Vector3(Math.cos(ang) * rLegTop, yLegTop, Math.sin(ang) * rLegTop);
-    const b = new THREE.Vector3(Math.cos(ang) * rLegBot, L.yFrameRear + mm2m(2), Math.sin(ang) * rLegBot);
-    const len = a.distanceTo(b);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(legW, len, mm2m(4.5)), frameMat);
-    leg.position.copy(a).add(b).multiplyScalar(0.5);
-    const dir = new THREE.Vector3().subVectors(b, a).normalize();
-    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    leg.userData.explodedGroup = 'frame';
-    staticParts.add(leg);
-  }
-
-  // rear ring (legs land on it)
-  const rearRing = lathe([
-    [rLegBot - mm2m(3), L.yFrameRear + mm2m(3)],
-    [rLegBot + mm2m(8), L.yFrameRear + mm2m(3)],
-    [rLegBot + mm2m(8), L.yFrameRear - mm2m(6)],
-    [rLegBot - mm2m(3), L.yFrameRear - mm2m(6)],
-  ], seg, frameMat);
-  rearRing.userData.explodedGroup = 'frame';
-  staticParts.add(rearRing);
-
   // spider shelf: sits exactly at the spider plane, inner radius == spider
   // outer radius — the spider outer edge rests ON this face (no air gap).
   const rShelfOut = Math.max(L.rMagOD + mm2m(2), L.rSpOut + mm2m(6));
@@ -273,18 +302,61 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   shelf.userData.explodedGroup = 'motor';
   staticParts.add(shelf);
 
-  // terminals (push terminals on the rear ring, ±X)
+  // basket legs: two bonded segments per leg —
+  //   A: flange underside → shelf ring edge
+  //   B: shelf underside → motor rim (top-plate/boot ring)
+  // 8 legs; die-cast baskets get wide tapered ribs, stamped get narrower ones.
+  const nLegs = 8;
+  const legW = (p.frame as { style?: string }).style === 'diecast' ? mm2m(15) : mm2m(9);
+  const yLegTop = L.yFrameSeat - flangeW;
+  const rLegTop = L.rFrameOut - mm2m(4);
+  const rShelfLand = rShelfOut - mm2m(2);
+  const rFoot = L.rLegFoot - mm2m(1.5);
+  const addLegSeg = (
+    aR: number, aY: number, bR: number, bY: number, ang: number, wTop: number, wBot: number,
+  ): void => {
+    const a = new THREE.Vector3(Math.cos(ang) * aR, aY, Math.sin(ang) * aR);
+    const b = new THREE.Vector3(Math.cos(ang) * bR, bY, Math.sin(ang) * bR);
+    const len = a.distanceTo(b);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry((wTop + wBot) / 2, len, mm2m(4.5)), frameMat);
+    leg.position.copy(a).add(b).multiplyScalar(0.5);
+    const dir = new THREE.Vector3().subVectors(b, a).normalize();
+    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    leg.userData.explodedGroup = 'frame';
+    staticParts.add(leg);
+  };
+  for (let i = 0; i < nLegs; i++) {
+    const ang = (i / nLegs) * Math.PI * 2;
+    addLegSeg(rLegTop, yLegTop, rShelfLand, L.yShelfTop - mm2m(0.5), ang, legW, legW * 0.8);
+    addLegSeg(rShelfLand, L.yShelfTop - mm2m(2.5), rFoot, L.yLegFoot, ang, legW * 0.7, legW * 0.55);
+    // foot pad — bonds the leg to the plate/boot rim (no floating ends)
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.8, mm2m(3), mm2m(7)), frameMat);
+    pad.position.set(Math.cos(ang) * rFoot, L.yLegFoot + mm2m(0.8), Math.sin(ang) * rFoot);
+    pad.rotation.y = -ang;
+    pad.userData.explodedGroup = 'frame';
+    staticParts.add(pad);
+  }
+
+  // terminals: race-style blocks on the ±X legs between shelf and motor rim,
+  // each with two gold push posts; the tinsel lands here.
   const termMat = new THREE.MeshStandardMaterial({ color: '#c9a227', roughness: 0.35, metalness: 0.85 });
-  const termX = rLegBot + mm2m(9);
+  const yTerm = (L.yShelfTop + L.yLegFoot) / 2;
+  const fTerm = Math.max(0, Math.min(1, (L.yShelfTop - mm2m(2.5) - yTerm) / Math.max(1e-6, L.yShelfTop - mm2m(2.5) - L.yLegFoot)));
+  const rTerm = rShelfLand + (rFoot - rShelfLand) * fTerm + mm2m(3);
+  const termPos: { x: number; y: number; z: number }[] = [];
   for (const sx of [-1, 1]) {
-    const term = new THREE.Mesh(new THREE.BoxGeometry(mm2m(14), mm2m(10), mm2m(5)), frameMat);
-    term.position.set(sx * termX, L.yFrameRear, 0);
-    term.userData.explodedGroup = 'frame';
-    staticParts.add(term);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.8), mm2m(1.8), mm2m(8), 12), termMat);
-    post.position.set(sx * termX, L.yFrameRear + mm2m(7), 0);
-    post.userData.explodedGroup = 'frame';
-    staticParts.add(post);
+    const block = new THREE.Mesh(new THREE.BoxGeometry(mm2m(13), mm2m(11), mm2m(11)), frameMat);
+    block.position.set(sx * rTerm, yTerm, 0);
+    block.rotation.y = Math.PI / 2;
+    block.userData.explodedGroup = 'frame';
+    staticParts.add(block);
+    for (const sz of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.7), mm2m(1.7), mm2m(9), 12), termMat);
+      post.position.set(sx * rTerm, yTerm + mm2m(7), sz * mm2m(3));
+      post.userData.explodedGroup = 'frame';
+      staticParts.add(post);
+      termPos.push({ x: sx * rTerm, y: yTerm + mm2m(11), z: sz * mm2m(3) });
+    }
   }
 
   /* ---------- deformables (profiles from layout.ts) ---------- */
@@ -341,22 +413,22 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       spiderProfile(L, corrN, corrD, x).map(([r, y]) => new THREE.Vector2(r, y)), seg);
 
     // tinsel leads: bonded to the FORMER just above the spider bond, routed
-    // through the basket to the actual terminal posts (±X).
+    // through the basket to the actual terminal posts.
     const rAttach = L.rFormerOut + mm2m(0.4);
     const yAttach = L.ySpider + mm2m(1.2) + x;
-    const yTerm = L.yFrameRear + mm2m(6);
     for (let i = 0; i < leadMeshes.length; i++) {
-      // spread the lead roots around the former; land on the nearest terminal
+      // spread the lead roots around the former; land on the nearest post
       const frac = leadMeshes.length === 1 ? 0.5 : i / (leadMeshes.length - 1);
       const ang = Math.PI * (0.15 + 0.7 * frac);           // 27°..153° around +Z side
       const side = i < leadMeshes.length / 2 ? 1 : -1;      // left/right terminal
       const ax = Math.cos(ang) * rAttach, az = Math.sin(ang) * rAttach;
-      const tx = side * termX, tz = mm2m(0);
+      const post = termPos[i % termPos.length];
+      const tx = side * Math.abs(post.x), tz = Math.abs(post.z);
       const midX = (ax + tx) / 2, midZ = (az + tz) / 2;
       const curve = new THREE.QuadraticBezierCurve3(
         new THREE.Vector3(ax, yAttach, az),
-        new THREE.Vector3(midX, (yAttach + yTerm) / 2 - mm2m(3), midZ),
-        new THREE.Vector3(tx, yTerm, tz)
+        new THREE.Vector3(midX, (yAttach + post.y) / 2 - mm2m(3), midZ),
+        new THREE.Vector3(tx, post.y, tz)
       );
       const g = new THREE.TubeGeometry(curve, 14, mm2m(0.55), 6, false);
       leadMeshes[i].geometry.dispose();
