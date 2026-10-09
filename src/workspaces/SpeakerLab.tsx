@@ -16,6 +16,7 @@ export function SpeakerLab() {
   const patchCone = useApp((s) => s.patchCone);
   const patchCoil = useApp((s) => s.patchCoil);
   const patchMagnet = useApp((s) => s.patchMagnet);
+  const patchDriver = useApp((s) => s.patchDriver);
   const [cursor, setCursor] = useState<number | null>(null);
   const [showCurves, setShowCurves] = useState(true);
 
@@ -62,6 +63,7 @@ export function SpeakerLab() {
             <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={200} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
             <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={30} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />
             <Param label="Wire Ø" value={driver.coil.wireDiameter} min={0.1} max={1.2} unit="mm" digits={2} onChange={(v) => patchCoil({ wireDiameter: v })} />
+            <Param label="Power handling" value={driver.powerHandlingW} min={1} max={5000} step={5} digits={0} unit="W (cont.)" badge="user" onChange={(v) => patchDriver({ powerHandlingW: v })} hint="Continuous thermal rating — used by the Max SPL thermal limit and the Dashboard thermal gauge" />
           </Section>
 
           <Section title="Status">
@@ -99,6 +101,7 @@ export function SpeakerLab() {
               <Readout k="Xmech" v={ts.Xmech.toFixed(1)} unit="mm one-way" />
               <Readout k="η₀" v={(ts.eta0 * 100).toFixed(2)} unit="%" badge={<Badge kind="est">EST</Badge>} />
               <Readout k="Sensitivity" v={ts.sens.toFixed(1)} unit="dB@1W/1m" acc />
+              <Readout k="Power handling" v={driver.powerHandlingW.toFixed(0)} unit="W continuous" />
               <Readout k="Wire length" v={ts.wireLength.toFixed(1)} unit="m" badge={<Badge kind="est">EST</Badge>} />
               <Readout k="Turns" v={`${ts.turnsTotal}`} unit={`(${ts.turnsInGap} in gap)`} />
               <Readout k="Load / power" v={`${amp.nominalLoad.toFixed(1)}Ω · ${amp.estimatedPowerW.toFixed(1)}W`} />

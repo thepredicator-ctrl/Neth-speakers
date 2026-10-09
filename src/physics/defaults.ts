@@ -99,6 +99,7 @@ export function defaultDriver(): DriverParams {
     xmechOverride: null,
     xmaxOverride: null,
     vasOverride: null,
+    powerHandlingW: 150,
   };
 }
 
@@ -183,6 +184,7 @@ export const PRESETS: PresetDef[] = [
       d.magnet.materialId = 'ferrite-y35'; d.magnet.diameter = 170; d.magnet.innerDiameter = 66; d.magnet.thickness = 25; d.magnet.poleDiameter = 63.5; d.magnet.topPlateThickness = 9; d.magnet.backPlateThickness = 12; d.magnet.backPlateDiameter = 170; d.magnet.topPlateDiameter = 160; d.magnet.gapWidth = 1.2; d.magnet.leakageFactor = 1.75;
       d.frame.depth = 130;
       d.qmsTarget = 6;
+      d.powerHandlingW = 400;
       return d;
     },
     enclosure: { type: 'ported', internalWidth: 420, internalHeight: 480, internalDepth: 400, port: { shape: 'round', diameter: 100, length: 320, count: 1, flared: true, slotWidth: 60, slotHeight: 300 }, damping: 'heavyFill' },
@@ -199,6 +201,7 @@ export const PRESETS: PresetDef[] = [
       d.coil.windingDiameter = 35.5; d.coil.formerDiameter = 34.2; d.coil.formerHeight = 16; d.coil.wireDiameter = 0.35; d.coil.layers = 2; d.coil.turnsPerLayer = 38;
       d.magnet.diameter = 100; d.magnet.innerDiameter = 37; d.magnet.thickness = 15; d.magnet.poleDiameter = 35.2; d.magnet.topPlateThickness = 5; d.magnet.topPlateDiameter = 90; d.magnet.backPlateDiameter = 100; d.magnet.gapWidth = 0.9;
       d.frame.depth = 72;
+      d.powerHandlingW = 120;
       return d;
     },
     enclosure: { type: 'sealed', internalWidth: 240, internalHeight: 280, internalDepth: 220, bracingVolume: 0.3 },
@@ -213,6 +216,7 @@ export const PRESETS: PresetDef[] = [
       d.magnet.materialId = 'neodymium-n42'; d.magnet.diameter = 100; d.magnet.innerDiameter = 53; d.magnet.thickness = 8; d.magnet.poleDiameter = 50.5; d.magnet.topPlateThickness = 6; d.magnet.topPlateDiameter = 92; d.magnet.backPlateThickness = 8; d.magnet.leakageFactor = 1.35;
       d.surround.materialId = 'rubber-nbr';
       d.qmsTarget = 4.5;
+      d.powerHandlingW = 100;
       return d;
     },
     enclosure: { type: 'sealed', internalWidth: 300, internalHeight: 340, internalDepth: 260 },
@@ -229,6 +233,7 @@ export const PRESETS: PresetDef[] = [
       d.magnet.materialId = 'ferrite-y35'; d.magnet.diameter = 220; d.magnet.innerDiameter = 82; d.magnet.thickness = 30; d.magnet.poleDiameter = 78.5; d.magnet.topPlateThickness = 11; d.magnet.topPlateDiameter = 210; d.magnet.backPlateDiameter = 220; d.magnet.backPlateThickness = 16; d.magnet.gapWidth = 1.4; d.magnet.leakageFactor = 1.8;
       d.frame.depth = 170;
       d.qmsTarget = 6.5;
+      d.powerHandlingW = 800;
       return d;
     },
     enclosure: {

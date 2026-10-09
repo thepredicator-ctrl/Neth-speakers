@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp, useSnapshotPush, type WorkspaceId } from './store';
 import { engine } from './audio/engine';
+import { Dashboard } from './workspaces/Dashboard';
 import { SpeakerLab } from './workspaces/SpeakerLab';
 import { Simulator3D } from './workspaces/Simulator3D';
 import { AudioLab } from './workspaces/AudioLab';
@@ -13,6 +14,7 @@ import { ProjectManager } from './workspaces/ProjectManager';
 import { physicalDispMm } from './components/Viewport3D';
 
 const ICONS: Record<WorkspaceId, React.ReactNode> = {
+  dashboard: <IconGauge />,
   speaker: <IconSpeaker />,
   sim3d: <IconCube />,
   audio: <IconWave />,
@@ -24,6 +26,7 @@ const ICONS: Record<WorkspaceId, React.ReactNode> = {
 };
 
 const LABELS: Record<WorkspaceId, string> = {
+  dashboard: 'Dashboard',
   speaker: 'Speaker Lab',
   sim3d: '3D Simulator',
   audio: 'Audio Lab',
@@ -57,7 +60,10 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+      const ids = Object.keys(LABELS) as WorkspaceId[];
+      const n = parseInt(e.key, 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= ids.length) { setWorkspace(ids[n - 1]); return; }
       if (e.code === 'Space' && workspace === 'audio') {
         e.preventDefault();
         void engine.ensure().then(() => setAudioOn(true));
@@ -65,7 +71,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [workspace]);
+  }, [workspace, setWorkspace]);
 
   return (
     <div className="app">
@@ -106,6 +112,7 @@ export function App() {
         </nav>
 
         <main className="content" key={workspace}>
+          {workspace === 'dashboard' ? <Dashboard /> : null}
           {workspace === 'speaker' ? <SpeakerLab /> : null}
           {workspace === 'sim3d' ? <Simulator3D /> : null}
           {workspace === 'audio' ? <AudioLab /> : null}
@@ -127,6 +134,8 @@ export function App() {
         <span>Fs {ts.Fs.toFixed(1)} Hz · Qts {ts.Qts.toFixed(3)}</span>
         <span className="spacer flex1" />
         <span title="Simulation mode">{sim.mode.toUpperCase()}</span>
+        <span className="sep">|</span>
+        <span className="dim">keys 1–9 = workspaces</span>
         <span className="sep">|</span>
         <span title={snapshot.sync === 'ok' ? 'Displacement stream synced to the audio clock' : 'No live audio stream'}>
           {snapshot.sync === 'ok' ? 'SYNC LOCKED' : snapshot.sync === 'stale' ? 'SYNC STALE' : 'SIM IDLE'}
@@ -168,4 +177,7 @@ function IconChart() {
 }
 function IconFolder() {
   return <Ic><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /></Ic>;
+}
+function IconGauge() {
+  return <Ic><path d="M4 15a8 8 0 0116 0" /><path d="M12 15l4-5" /><path d="M4 19h16" /><circle cx="12" cy="15" r="1.4" /></Ic>;
 }

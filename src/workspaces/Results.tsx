@@ -8,6 +8,7 @@ import { computeTS } from '../physics/tsp';
 import { buildSystem, wiringInfo } from '../physics/stateSpace';
 import { logspace } from '../physics/units';
 import { MATERIALS } from '../physics/materials';
+import { f3OfCurve, groupDelayMs } from '../physics/analysis';
 import type { DriverParams, EnclosureParams } from '../physics/types';
 import type { ProjectRecord } from '../storage/project';
 
@@ -60,7 +61,7 @@ export function Results() {
 
   const data = useMemo(() => {
     const f = logspace(12, 12000, 260);
-    const series: { s: DesignSnapshot; ts: ReturnType<typeof computeTS>; splDb: number[]; excMm: number[]; imp: number[] }[] = [];
+    const series: { s: DesignSnapshot; ts: ReturnType<typeof computeTS>; splDb: number[]; excMm: number[]; imp: number[]; gdMs: number[]; F3: number | null }[] = [];
     for (const s of snaps) {
       try {
         const ts = computeTS(s.driver, mats);
@@ -78,11 +79,14 @@ export function Results() {
         const exc = responseOverGrid(sys.A, sys.B, sys.cx, f);
         const imp = impedanceCurve(ts, f, s.enclosure, encRes, 0);
         const vRef = 2.83;
+        const splDb = spl.mag.map((m) => 20 * Math.log10(Math.max(m * vRef * sys.splScale, 1e-12) / 2e-5));
         series.push({
           s, ts,
-          splDb: spl.mag.map((m) => 20 * Math.log10(Math.max(m * vRef * sys.splScale, 1e-12) / 2e-5)),
+          splDb,
           excMm: exc.mag.map((m) => m * vRef * 1000),
           imp: imp.mag,
+          gdMs: groupDelayMs(f, spl.phase),
+          F3: f3OfCurve(f, splDb),
         });
       } catch { /* skip broken snapshot */ }
     }
@@ -97,6 +101,9 @@ export function Results() {
   }));
   const impSeries: Series[] = data.series.map((d) => ({
     name: d.s.name, color: d.s.color, points: data.f.map((f, i) => [f, d.imp[i]] as [number, number]),
+  }));
+  const gdSeries: Series[] = data.series.map((d) => ({
+    name: d.s.name, color: d.s.color, points: data.f.map((f, i) => [f, d.gdMs[i]] as [number, number]),
   }));
 
   const generateReport = () => {
@@ -178,13 +185,22 @@ export function Results() {
             />
             <p className="note">One-way (Xmax) limits — peak-to-peak travel is 2× these values; total mechanical clearance is ±Xmech. Never confuse the three.</p>
           </Section>
+          <Section title="Group delay @2.83 V">
+            <Plot
+              height={200} xLog yLabel="ms"
+              series={gdSeries}
+              refLines={[{ y: 25, color: 'rgba(255,209,102,0.5)', label: 'audible 25 ms' }]}
+              cursorFreq={cursor} onCursor={setCursor} csvName="compare-groupdelay"
+            />
+            <p className="note">Peaks near system resonance. Ported boxes delay bass more than sealed — compare before committing to a small ported box.</p>
+          </Section>
           <Section title="Parameter Table">
             <div style={{ overflowX: 'auto' }}>
               <table className="data">
                 <thead>
                   <tr>
                     <th>Design</th><th>Fs Hz</th><th>Qts</th><th>Vas L</th><th>Re Ω</th><th>Bl T·m</th><th>Sd cm²</th>
-                    <th>Mms g</th><th>Xmax mm</th><th>η₀ %</th><th>sens dB</th><th>Box</th>
+                    <th>Mms g</th><th>Xmax mm</th><th>η₀ %</th><th>sens dB</th><th>F3 Hz</th><th>Box</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -201,6 +217,7 @@ export function Results() {
                       <td className="num">{d.ts.Xmax.toFixed(1)}</td>
                       <td className="num">{(d.ts.eta0 * 100).toFixed(2)}</td>
                       <td className="num">{d.ts.sens.toFixed(1)}</td>
+                      <td className="num acc-txt">{d.F3 ? d.F3.toFixed(1) : '—'}</td>
                       <td className="num">{d.s.enclosure.type} {d.s.enclosure.internalWidth}×{d.s.enclosure.internalHeight}×{d.s.enclosure.internalDepth}</td>
                     </tr>
                   ))}

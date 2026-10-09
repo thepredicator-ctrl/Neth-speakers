@@ -7,6 +7,7 @@ import { engine } from '../audio/engine';
 import { responseOverGrid, impedanceCurve, runDiscrete, steadyStateMag } from '../physics/freqresp';
 import { logspace, RHO0 } from '../physics/units';
 import { sineBlock, logSweep, linSweep, noise, toneBurst, FS_DEFAULT } from '../physics/dsp';
+import { systemCurves, maxSplCurve, hd3Estimate, type SystemCurves, type MaxSplCurve } from '../physics/analysis';
 
 type GenMode = 'sine' | 'sweepLog' | 'sweepLin' | 'stepped' | 'multitone' | 'pinkNoise' | 'whiteNoise' | 'burst' | 'impulse';
 
@@ -36,23 +37,18 @@ export function FrequencyLab() {
   const curves = useMemo(() => {
     if (!sys) return null;
     const f = logspace(10, 24000, 300);
-    const spl = responseOverGrid(sys.A, sys.B, sys.cp, f);
-    const exc = responseOverGrid(sys.A, sys.B, sys.cx, f);
-    const vel = responseOverGrid(sys.A, sys.B, sys.cv, f);
-    const cur = responseOverGrid(sys.A, sys.B, sys.ci, f);
-    const imp = impedanceCurve(ts, f, enclosure, useApp.getState().derived.encLitres, amplifier.outputImpedance);
-    const splDb = spl.mag.map((m) => 20 * Math.log10(Math.max(m * vRef * sys.splScale, 1e-12) / 2e-5));
-    return {
-      f,
-      splDb,
-      excMm: exc.mag.map((m) => m * vRef * 1000),
-      velMmS: vel.mag.map((m) => m * vRef * 1000),
-      curA: cur.mag.map((m) => m * vRef),
-      impMag: imp.mag,
-      impPhase: imp.phase,
-      powerW: imp.mag.map((m, i) => Math.pow((vRef / m), 2) * (imp.re[i] - amplifier.outputImpedance)),
+    const drive = {
+      vRef,
+      clipV: amplifier.clipEnabled ? amplifier.clipVoltageRms : null,
+      thermalW: useApp.getState().driver.powerHandlingW,
+      loadOhms: amp.nominalLoad,
     };
-  }, [ts, sys, enclosure, amplifier.outputImpedance, vRef]);
+    const c: SystemCurves = systemCurves(sys, ts, enclosure, useApp.getState().derived.encLitres, f, drive);
+    const splMax: MaxSplCurve = maxSplCurve(c, ts, drive);
+    const hd3 = hd3Estimate(c, ts, useApp.getState().driver);
+    const powerW = c.impMag.map((m, i) => Math.pow((vRef / m), 2) * (c.impRe[i] - amplifier.outputImpedance));
+    return { ...c, splMax, hd3, powerW };
+  }, [ts, sys, enclosure, amplifier.outputImpedance, amplifier.clipEnabled, amplifier.clipVoltageRms, vRef, amp.nominalLoad]);
 
   /* ------- generator ------- */
   const stopGen = () => {
@@ -204,6 +200,8 @@ export function FrequencyLab() {
               <ReadRow k="Velocity" v={readAt(curves?.velMmS)} unit="mm/s" />
               <ReadRow k="SPL" v={readAt(curves?.splDb)} unit="dB" />
               <ReadRow k="Electrical power" v={readAt(curves?.powerW)} unit="W" />
+              <ReadRow k="Group delay" v={readAt(curves?.gdMs)} unit="ms" />
+              {curves?.portUm ? <ReadRow k="Port air speed" v={readAt(curves.portUm)} unit="m/s" /> : null}
             </div>
             <div className="row" style={{ marginTop: 8 }}>
               {overLimit ? <Badge kind="warn">EXCEEDS ±Xmax AT THIS FREQUENCY</Badge> : <Badge kind="ok">WITHIN EXCURSION LIMITS</Badge>}
@@ -212,14 +210,19 @@ export function FrequencyLab() {
         </div>
 
         <div className="main-area">
-          <Section title="Estimated SPL — far-field piston @ 1 m">
+          <Section title="Estimated SPL — far-field piston @ 1 m" right={curves ? <span className="note mono">peak achievable {Math.max(...curves.splMax.dbMax.filter(Number.isFinite)).toFixed(0)} dB</span> : undefined}>
             <Plot
               height={210} xLog yLabel="dB SPL"
-              series={[{ name: 'SPL', color: '#35c8dc', points: curves ? curves.f.map((f, i) => [f, curves.splDb[i]] as [number, number]) : [] }]}
+              series={[
+                { name: 'SPL', color: '#35c8dc', points: curves ? curves.f.map((f, i) => [f, curves.splDb[i]] as [number, number]) : [], width: 2 },
+                ...(curves ? [
+                  { name: 'Max SPL (limits)', color: '#ff7a1a', points: curves.splMax.f.map((f, i) => [f, curves.splMax.dbMax[i]] as [number, number]), dash: [6, 4], width: 1.5 },
+                ] : []),
+              ]}
               cursorFreq={cursor} onCursor={setCursor}
               csvName="spl-response"
             />
-            <p className="note">Piston model in infinite baffle, on-axis — excludes baffle-step loss, cone breakup and room effects. Simulated prediction, not a microphone measurement.</p>
+            <p className="note">Piston model in infinite baffle, on-axis — excludes baffle-step loss, cone breakup and room effects. Orange ceiling: max achievable SPL before excursion/thermal/clip limits.</p>
           </Section>
 
           <div className="grid2">
@@ -264,6 +267,35 @@ export function FrequencyLab() {
                 cursorFreq={cursor} onCursor={setCursor}
                 csvName="velocity-power"
               />
+            </Section>
+            <Section title="Group delay">
+              <Plot
+                height={180} xLog yLabel="ms"
+                series={[{ name: 'τg', color: '#9b7bff', points: curves ? curves.f.map((f, i) => [f, curves.gdMs[i]] as [number, number]) : [] }]}
+                refLines={[{ y: 25, color: 'rgba(255,209,102,0.5)', label: 'audible 25 ms' }]}
+                cursorFreq={cursor} onCursor={setCursor}
+                csvName="group-delay"
+              />
+            </Section>
+            {curves?.portUm ? (
+              <Section title="Port air velocity" right={<Badge kind={Math.max(...curves.portUm) > 27 ? 'warn' : Math.max(...curves.portUm) > 17 ? 'warn' : 'ok'}>{Math.max(...curves.portUm).toFixed(1)} m/s peak</Badge>}>
+                <Plot
+                  height={180} xLog yLabel="m/s (rms)"
+                  series={[{ name: 'u port', color: '#35c8dc', points: curves.f.map((f, i) => [f, curves.portUm![i]] as [number, number]) }]}
+                  refLines={[{ y: 17, color: 'rgba(255,209,102,0.5)', label: '17 chuff zone' }, { y: 27, color: 'rgba(255,77,77,0.5)', label: '27 severe' }]}
+                  cursorFreq={cursor} onCursor={setCursor}
+                  csvName="port-velocity"
+                />
+              </Section>
+            ) : null}
+            <Section title="3rd-harmonic distortion estimate" right={curves ? <Badge kind="est">QUASI-STATIC</Badge> : undefined}>
+              <Plot
+                height={180} xLog yLabel="% HD3"
+                series={[{ name: 'HD3', color: '#e05555', points: curves ? curves.f.map((f, i) => [f, curves.hd3[i]] as [number, number]) : [] }]}
+                cursorFreq={cursor} onCursor={setCursor}
+                csvName="hd3"
+              />
+              <p className="note">From the modelled Kms(x) stiffening and Bl(x) droop at this drive level — peaks where excursion peaks. Excludes cone breakup and even-order (asymmetry) terms.</p>
             </Section>
           </div>
         </div>

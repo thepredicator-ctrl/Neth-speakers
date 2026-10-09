@@ -36,7 +36,7 @@ export interface Workspace {
   id: WorkspaceId;
 }
 export type WorkspaceId =
-  | 'speaker' | 'sim3d' | 'audio' | 'frequency' | 'enclosure' | 'parts' | 'results' | 'projects';
+  | 'dashboard' | 'speaker' | 'sim3d' | 'audio' | 'frequency' | 'enclosure' | 'parts' | 'results' | 'projects';
 
 interface AppState {
   driver: DriverParams;
@@ -162,7 +162,7 @@ export const useApp = create<AppState>((set, get) => {
     currentProjectId: null,
     projects: [],
     snapshot: { x: 0, v: 0, i: 0, limit: false, clip: false, sync: 'idle' },
-    workspace: 'speaker',
+    workspace: 'dashboard',
     derived: computeDerived(defaultDriver(), defaultEnclosure(), defaultAmplifier(), materialFinder([])),
 
     setWorkspace: (w) => set({ workspace: w }),

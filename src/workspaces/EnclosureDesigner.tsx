@@ -9,6 +9,7 @@ import { responseOverGrid, computeEnclosure } from '../physics/freqresp';
 import { buildSystem, wiringInfo } from '../physics/stateSpace';
 import { logspace, C_SOUND, RHO0 } from '../physics/units';
 import { computeAmp } from '../physics/amplifier';
+import { optimizeAlignment, autoPort, portFlowAtFb, type AlignSolution } from '../physics/analysis';
 
 export function EnclosureDesigner() {
   const driver = useApp((s) => s.driver);
@@ -23,6 +24,8 @@ export function EnclosureDesigner() {
   const [wallOpacity, setWallOpacity] = useState(0.16);
   const [section, setSection] = useState<number>(35);
   const [cursor, setCursor] = useState<number | null>(null);
+  const [wizard, setWizard] = useState<AlignSolution | null>(null);
+  const [wizardBusy, setWizardBusy] = useState(false);
 
   const res = useApp((s) => s.derived.encLitres);
 
@@ -70,10 +73,74 @@ export function EnclosureDesigner() {
     return { n, series, perDriver };
   }, [enc.driverCount, enc.wiring]);
 
+  /* ---- Box Wizard: numeric alignment search on the real model ---- */
+  const runWizard = (kind: 'sealedButterworth' | 'maxflat' | 'ebs') => {
+    setWizardBusy(true);
+    setTimeout(() => {
+      try {
+        const sol = optimizeAlignment({
+          ts, base: enc, driverDisplacementL: drvL, vRated: amp.vpeak / Math.SQRT2,
+          maxPortLenMM: enc.internalDepth - 2 * enc.wallThickness,
+        }, { kind, targetQtc: 0.707 });
+        // port volume flow at the proposed Fb from the exact state model
+        let port: AlignSolution['port'] | undefined;
+        if (sol.FbHz != null) {
+          const wctx = { ts, base: enc, driverDisplacementL: drvL, vRated: amp.vpeak / Math.SQRT2, maxPortLenMM: enc.internalDepth - 2 * enc.wallThickness };
+          const U = portFlowAtFb(wctx, sol.VbL, sol.FbHz, amp.vpeak / Math.SQRT2);
+          port = autoPort(wctx, sol.VbL, sol.FbHz, U);
+        }
+        // apply everything in one patch so sanitization sees consistent dims
+        patchEnclosure({
+          type: kind === 'sealedButterworth' ? 'sealed' : 'ported',
+          internalWidth: Math.round(sol.internal.w),
+          internalHeight: Math.round(sol.internal.h),
+          internalDepth: Math.round(sol.internal.d),
+          ...(port ? { port: { ...enc.port, shape: port.shape, diameter: port.diameter, length: port.length, count: port.count, flared: port.flared, slotWidth: port.slotWidth, slotHeight: port.slotHeight } } : {}),
+        });
+        setWizard({ ...sol, port });
+      } finally {
+        setWizardBusy(false);
+      }
+    }, 30);
+  };
+
   return (
     <div className="ws no-scroll" style={{ height: '100%' }}>
       <div className="split" style={{ flex: 1 }}>
         <div className="side">
+          <Section title="Box Wizard — Auto-Align" right={wizardBusy ? <Badge kind="est">SEARCHING…</Badge> : undefined}>
+            <div className="row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+              <Btn variant="primary" disabled={wizardBusy} onClick={() => runWizard('maxflat')} title="Searches volume+tuning for the flattest passband, then deepest F3">
+                ◎ Ported · Max-Flat alignment
+              </Btn>
+              <Btn disabled={wizardBusy} onClick={() => runWizard('ebs')} title="Allows a small shelf to reach the lowest possible extension">
+                ↓ Ported · EBS (deep extension)
+              </Btn>
+              <Btn disabled={wizardBusy} onClick={() => runWizard('sealedButterworth')} title="Closed-form Qtc = 0.707 Butterworth box">
+                ◯ Sealed · Butterworth Qtc 0.707
+              </Btn>
+            </div>
+            {wizard ? (
+              <div className="card" style={{ marginTop: 8, background: 'var(--panel2)' }}>
+                <div className="readout-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                  <Readout k="Box (net target)" v={wizard.VbL.toFixed(1)} unit="L" acc />
+                  {wizard.FbHz != null ? <Readout k="Tuning Fb" v={wizard.FbHz.toFixed(1)} unit="Hz" acc /> : <Readout k="Qtc" v={wizard.Qtc?.toFixed(2) ?? '—'} acc />}
+                  <Readout k="Predicted F3" v={wizard.F3Hz.toFixed(1)} unit="Hz" />
+                  <Readout k="Ripple" v={wizard.rippleDb.toFixed(2)} unit="dB" />
+                  {wizard.port ? <Readout k="Port" v={wizard.port.shape === 'round' ? `${wizard.port.count}×Ø${wizard.port.diameter} · L${wizard.port.length}` : `slot ${wizard.port.slotWidth}×${wizard.port.slotHeight} · L${wizard.port.length}`} unit="mm" /> : null}
+                  {wizard.port ? <Readout k="Port velocity ≈" v={wizard.port.velocity != null ? wizard.port.velocity.toFixed(1) : '—'} unit="m/s" /> : null}
+                </div>
+                {wizard.port && wizard.port.velocity != null && wizard.port.velocity > 17 ? <div className="warnbox" style={{ marginTop: 6 }}>Port velocity {wizard.port.velocity.toFixed(0)} m/s above 17 — box too small for this driver at rated power; accept the biggest box the search allows.</div> : null}
+                <p className="note" style={{ margin: '6px 0 0' }}>{wizard.notes[0]}. Internal dims scaled from the current aspect ratio.</p>
+              </div>
+            ) : (
+              <p className="note" style={{ marginBottom: 0 }}>
+                The wizard searches hundreds of volume/tuning combinations <b>against the actual state-space response</b> —
+                no lookup tables — then sizes the port to keep air speed under the chuffing threshold at rated power.
+              </p>
+            )}
+          </Section>
+
           <Section title="Enclosure Type">
             <div className="tabs">
               {(['sealed', 'ported', 'passiveRadiator'] as const).map((t) => (

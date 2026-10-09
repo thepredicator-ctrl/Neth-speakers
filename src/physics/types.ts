@@ -118,6 +118,7 @@ export interface DriverParams {
   xmechOverride: Overridable; // mm
   xmaxOverride: Overridable;  // mm
   vasOverride: Overridable;   // litres
+  powerHandlingW: number;     // W — continuous thermal (voice-coil) power rating
 }
 
 export interface EnclosurePort {

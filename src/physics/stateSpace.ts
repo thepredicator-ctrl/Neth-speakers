@@ -34,6 +34,7 @@ export interface SystemModel {
   cx: number[];          // displacement output row (m)
   cv: number[];          // velocity row (m/s)
   ci: number[];          // current row (A)
+  cpr: number[] | null;  // port / passive-radiator displacement row (m), null if none
   cp: number[];          // far-field pressure row: p(r=1m) = cp·state  (Pa/scale)
   splScale: number;      // total radiation scale (driver count × wiring)
   dt: number;            // native sample time used for discretization
@@ -171,36 +172,33 @@ export function buildSystem(o: BuildOptions): SystemModel {
   const cx = new Array(n).fill(0); cx[1] = 1;
   const cv = new Array(n).fill(0); cv[2] = 1;
   const ci = new Array(n).fill(0); ci[0] = 1;
+  const cpr = isPorted || isPR ? (() => { const r = new Array(n).fill(0); r[3] = 1; return r; })() : null;
 
   // Far-field pressure row (piston, on-axis, r = 1 m, infinite baffle):
-  // p ≈ (ρ0 / 2π r)·d/dt( Sd·x_d + Sp·x_p ) = (ρ0/2π)·(Sd·a_d + Sp·a_p)
+  //   p ≈ (ρ0 / 2π r)·d/dt(U) = (ρ0/2π)·(Sd·a_d − Sp·a_p)
+  // Built DIRECTLY from the A rows so every coupling term is included:
+  //   a_d = A[2]·state (incl. the Kcp/Mms·x_p box-pressure coupling — the old
+  //   hand-written row silently omitted it), a_p = A[4]·state.
+  // SIGN NOTE: the state variable x_p is positive when port/PR air moves INTO
+  // the box (the convention that makes cone-out ↔ port-in quasi-statically
+  // short the box pressure). Outward-radiated flow is therefore −x_p, so the
+  // port/PR acceleration enters with a NEGATIVE sign. Wrong sign ⇒ cone+port
+  // add below Fb (shallow ~4 dB/oct rolloff) and a non-physical cancellation
+  // notch above tuning; correct sign ⇒ textbook 24 dB/oct 4th-order rolloff.
   const cp = new Array(n).fill(0);
   {
     const K = RHO0 / (2 * Math.PI);
-    // cone acceleration = (Bl·i − Rms·v_d − (Kms+Kb)·x_d + coupling)/Mms
-    cp[0] += (K * ts.Sd * Bl) / Mms;
-    cp[1] += (K * ts.Sd * -(Kms + Kb)) / Mms;
-    cp[2] += (K * ts.Sd * -Rms) / Mms;
-    if (isPorted) {
-      const Mp = Math.max(1e-9, encResult!.portMass);
-      const Rp = Math.max(1e-9, encResult!.portDamping);
-      cp[1] += (K * Sp * ((RHO0 * C_SOUND * C_SOUND * Sp * ts.Sd) / Vb)) / Mp;
-      cp[3] += (K * Sp * (-(Kpp))) / Mp;
-      cp[4] += (K * Sp * -Rp) / Mp;
-    } else if (isPR) {
-      const Mpr = Math.max(1e-6, encResult!.prMass);
-      const Rpr = Math.max(1e-9, encResult!.prDamping);
-      const Kpr = Math.max(0, encResult!.prStiffness);
-      cp[1] += (K * Spr * ((RHO0 * C_SOUND * C_SOUND * Spr * ts.Sd) / Vb)) / Mpr;
-      cp[3] += (K * Spr * (-(Krr + Kpr))) / Mpr;
-      cp[4] += (K * Spr * -Rpr) / Mpr;
+    const aPort = isPorted ? Sp : isPR ? Spr : 0;
+    for (let j = 0; j < n; j++) {
+      const coneTerm = ts.Sd * A[2][j];
+      cp[j] = aPort > 0 ? K * (coneTerm - aPort * A[4][j]) : K * coneTerm;
     }
   }
 
   return {
     A, B, n, states,
     xIndex: 1, vIndex: 2, iIndex: 0,
-    cx, cv, ci, cp,
+    cx, cv, ci, cpr, cp,
     splScale: wiring.splScale,
     dt: 1 / o.sampleRate,
     meta: {

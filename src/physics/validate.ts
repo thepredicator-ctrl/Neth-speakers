@@ -234,6 +234,7 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     xmechOverride: ovr(d.xmechOverride, 0.2, 120),
     xmaxOverride: ovr(d.xmaxOverride, 0.05, 60),
     vasOverride: ovr(d.vasOverride, 0.1, 5000),
+    powerHandlingW: num((d as { powerHandlingW?: unknown }).powerHandlingW, 1, 10000, 150),
   };
   // AUTO-BALANCE: linear excursion can never exceed the mechanical limit.
   if (out.xmaxOverride != null && out.xmechOverride != null) {

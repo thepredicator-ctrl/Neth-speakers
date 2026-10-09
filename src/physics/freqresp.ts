@@ -192,8 +192,11 @@ export function computeEnclosure(
 
   const VbNet = netL; // litres
 
-  let portArea = 0, portLengthEff = 0, portMass = 0, portDamping = 1.2;
+  let portArea = 0, portLengthEff = 0, portMass = 0, portDamping = 0.03;
   let endCorr = 0;
+  // NOTE: port viscous damping ≈ 0.03 N·s/m → Qp ≈ 15–30, matching measured
+  // port losses. The old 1.2 N·s/m behaved like a large box leak and wiped
+  // out the Helmholtz resonance entirely (no Fb shoulder, no cone unloading).
   if (enc.port.shape === 'round') {
     const r = mm2m(enc.port.diameter) / 2;
     portArea = Math.PI * r * r * Math.max(1, enc.port.count);
