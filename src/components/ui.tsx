@@ -1,9 +1,10 @@
 /* Shared UI primitives: buttons, sliders with numeric input, badges, sections. */
 import React, { useState } from 'react';
 
-export function Btn(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'ghost' | 'danger'; active?: boolean; small?: boolean }) {
-  const { variant = 'default', active, small, className = '', ...rest } = props;
-  const cls = ['btn', variant !== 'default' ? variant : '', active ? 'active' : '', small ? 'small' : '', className].filter(Boolean).join(' ');
+export function Btn(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'ghost' | 'danger'; active?: boolean; small?: boolean; ghost?: boolean; danger?: boolean }) {
+  const { variant, active, small, ghost, danger, className = '', ...rest } = props;
+  const v = ghost && !variant ? 'ghost' : danger && !variant ? 'danger' : variant ?? 'default';
+  const cls = ['btn', v !== 'default' ? v : '', active ? 'active' : '', small ? 'small' : '', className].filter(Boolean).join(' ');
   return <button className={cls} {...rest} />;
 }
 

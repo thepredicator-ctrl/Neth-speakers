@@ -8,6 +8,8 @@
  */
 import type { MaterialDef } from './types';
 
+export type { MaterialDef };
+
 export const MATERIALS: MaterialDef[] = [
   // ---- Cone diaphragms -------------------------------------------------
   { id: 'paper', name: 'Kraft paper pulp', category: 'cone', density: 480, youngs: 3.2e9, lossFactor: 0.045,

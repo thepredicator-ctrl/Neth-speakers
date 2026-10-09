@@ -1,0 +1,153 @@
+{
+  "app": "neth-speakers",
+  "version": 1,
+  "name": "Neth-12 Sub (12″ long-throw)",
+  "savedAt": "2026-10-09T11:09:15.285Z",
+  "notes": "High-excursion 12″ subwoofer: tall roll surround, 4-layer coil, big box.",
+  "driver": {
+    "cone": {
+      "outerDiameter": 270,
+      "effectiveDiameter": 220,
+      "depth": 42,
+      "angleDeg": 65,
+      "thickness": 1.6,
+      "materialId": "polypropylene",
+      "mass": null,
+      "profile": "curved",
+      "dustCapDiameter": 80,
+      "dustCapShape": "dome",
+      "dustCapMaterialId": "paper",
+      "dustCapMass": null,
+      "color": "#26221c",
+      "finish": "matte"
+    },
+    "surround": {
+      "innerDiameter": 270,
+      "outerDiameter": 306,
+      "rollCount": 1,
+      "rollHeight": 15,
+      "rollWidth": 18,
+      "materialId": "rubber-butyl",
+      "thickness": 1.2,
+      "stiffness": 420,
+      "damping": 0.8
+    },
+    "spider": {
+      "innerDiameter": 62,
+      "outerDiameter": 160,
+      "corrugations": 11,
+      "corrDepth": 5.5,
+      "materialId": "spider-nomex",
+      "thickness": 0.35,
+      "stiffness": 900,
+      "damping": 1.4
+    },
+    "coil": {
+      "windingDiameter": 64.4,
+      "formerDiameter": 62.6,
+      "formerHeight": 40,
+      "formerMaterialId": "former-alu",
+      "formerThickness": 0.25,
+      "wireDiameter": 0.6,
+      "wireMaterialId": "copper",
+      "layers": 4,
+      "turnsPerLayer": 42,
+      "windingHeight": null,
+      "temperatureC": 30,
+      "config": "overhung",
+      "position": 0,
+      "mass": null,
+      "re": null,
+      "le": null
+    },
+    "magnet": {
+      "materialId": "ferrite-y35",
+      "count": 1,
+      "diameter": 170,
+      "innerDiameter": 66,
+      "thickness": 25,
+      "poleDiameter": 63.5,
+      "topPlateDiameter": 160,
+      "topPlateThickness": 9,
+      "backPlateDiameter": 170,
+      "backPlateThickness": 12,
+      "gapWidth": 1.2,
+      "leakageFactor": 1.75,
+      "bl": null,
+      "bGap": null
+    },
+    "frame": {
+      "depth": 130,
+      "gasketThickness": 1.5,
+      "terminals": "push",
+      "tinselLeads": 2,
+      "mountingHoles": 4,
+      "materialId": "steel"
+    },
+    "blDropAtXmech": 0.25,
+    "kmsRiseAtXmax": 0.6,
+    "rmsOverride": null,
+    "qmsTarget": 6,
+    "xmechOverride": null,
+    "xmaxOverride": null,
+    "vasOverride": null
+  },
+  "enclosure": {
+    "type": "ported",
+    "internalWidth": 420,
+    "internalHeight": 480,
+    "internalDepth": 400,
+    "wallThickness": 18,
+    "wallMaterialId": "mdf",
+    "bracingVolume": 0.6,
+    "damping": "heavyFill",
+    "port": {
+      "shape": "round",
+      "diameter": 100,
+      "length": 320,
+      "count": 1,
+      "flared": true,
+      "slotWidth": 60,
+      "slotHeight": 300
+    },
+    "passive": {
+      "enabled": false,
+      "diameter": 220,
+      "mass": 220,
+      "suspensionStiffness": 350,
+      "damping": 1.2
+    },
+    "driverCount": 1,
+    "wiring": "parallel",
+    "coilWiring": "parallel",
+    "driverMount": "flush"
+  },
+  "amplifier": {
+    "driveMode": "voltage",
+    "voltageRms": 2.83,
+    "powerW": 25,
+    "clipEnabled": false,
+    "clipVoltageRms": 14,
+    "currentLimitA": 0,
+    "outputImpedance": 0.05,
+    "bridged": false
+  },
+  "audio": {
+    "channel": "sum",
+    "band": "full",
+    "vizMode": "enhanced",
+    "vizMultiplier": 8,
+    "volume": 0.8,
+    "acousticOutput": false
+  },
+  "sim": {
+    "mode": "dynamic",
+    "speed": 1,
+    "running": true,
+    "paused": false
+  },
+  "customMaterials": [],
+  "id": "example_neth12sub",
+  "createdAt": "2026-10-09T11:09:15.285Z",
+  "modifiedAt": "2026-10-09T11:09:15.285Z"
+}

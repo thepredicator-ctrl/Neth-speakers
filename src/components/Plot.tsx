@@ -185,8 +185,9 @@ export function Plot(props: {
     }
 
     // cursor (hover or external)
-    const cx = cursorFreq != null ? xToPx(cursorFreq, w) : hover ? hover.px : null;
-    if (cx != null) {
+    const curX: number | null = cursorFreq != null ? xToPx(cursorFreq, w) : hover ? hover.px : null;
+    if (curX != null) {
+      const cx: number = curX;
       ctx.strokeStyle = 'rgba(255,122,26,0.75)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(cx, M.t); ctx.lineTo(cx, h - M.b); ctx.stroke();
@@ -229,7 +230,7 @@ export function Plot(props: {
       const bw = Math.max(...lines.map(([n]) => n.length * 6.2 + 40), 120);
       ctx.fillStyle = 'rgba(13,15,20,0.88)';
       ctx.strokeStyle = '#313744';
-      const bx = Math.min(cx + 10, w - M.r - bw - 4);
+      const bx = Math.min((cursorFreq != null ? xToPx(cursorFreq, w) : hover ? hover.px : 0) + 10, w - M.r - bw - 4);
       roundRect(ctx, bx, M.t + 4, bw, 14 + lines.length * 14, 6);
       ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#a7aeb9';

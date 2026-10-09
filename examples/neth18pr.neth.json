@@ -1,0 +1,153 @@
+{
+  "app": "neth-speakers",
+  "version": 1,
+  "name": "Neth-18 PR Sub (18″ + passive radiator)",
+  "savedAt": "2026-10-09T11:09:15.286Z",
+  "notes": "Very low tuning without a long port: 18″ active + 18″ passive radiator.",
+  "driver": {
+    "cone": {
+      "outerDiameter": 380,
+      "effectiveDiameter": 330,
+      "depth": 52,
+      "angleDeg": 65,
+      "thickness": 2.2,
+      "materialId": "polypropylene",
+      "mass": null,
+      "profile": "straight",
+      "dustCapDiameter": 110,
+      "dustCapShape": "dome",
+      "dustCapMaterialId": "paper",
+      "dustCapMass": null,
+      "color": "#26221c",
+      "finish": "matte"
+    },
+    "surround": {
+      "innerDiameter": 380,
+      "outerDiameter": 420,
+      "rollCount": 1,
+      "rollHeight": 18,
+      "rollWidth": 20,
+      "materialId": "rubber-butyl",
+      "thickness": 1.2,
+      "stiffness": 350,
+      "damping": 1
+    },
+    "spider": {
+      "innerDiameter": 80,
+      "outerDiameter": 220,
+      "corrugations": 12,
+      "corrDepth": 7,
+      "materialId": "spider-cotton",
+      "thickness": 0.35,
+      "stiffness": 750,
+      "damping": 2
+    },
+    "coil": {
+      "windingDiameter": 79.5,
+      "formerDiameter": 77.5,
+      "formerHeight": 50,
+      "formerMaterialId": "former-kapton",
+      "formerThickness": 0.25,
+      "wireDiameter": 0.7,
+      "wireMaterialId": "copper",
+      "layers": 4,
+      "turnsPerLayer": 44,
+      "windingHeight": null,
+      "temperatureC": 30,
+      "config": "overhung",
+      "position": 0,
+      "mass": null,
+      "re": null,
+      "le": null
+    },
+    "magnet": {
+      "materialId": "ferrite-y35",
+      "count": 1,
+      "diameter": 220,
+      "innerDiameter": 82,
+      "thickness": 30,
+      "poleDiameter": 78.5,
+      "topPlateDiameter": 210,
+      "topPlateThickness": 11,
+      "backPlateDiameter": 220,
+      "backPlateThickness": 16,
+      "gapWidth": 1.4,
+      "leakageFactor": 1.8,
+      "bl": null,
+      "bGap": null
+    },
+    "frame": {
+      "depth": 170,
+      "gasketThickness": 1.5,
+      "terminals": "push",
+      "tinselLeads": 2,
+      "mountingHoles": 4,
+      "materialId": "steel"
+    },
+    "blDropAtXmech": 0.25,
+    "kmsRiseAtXmax": 0.6,
+    "rmsOverride": null,
+    "qmsTarget": 6.5,
+    "xmechOverride": null,
+    "xmaxOverride": null,
+    "vasOverride": null
+  },
+  "enclosure": {
+    "type": "passiveRadiator",
+    "internalWidth": 520,
+    "internalHeight": 620,
+    "internalDepth": 460,
+    "wallThickness": 18,
+    "wallMaterialId": "mdf",
+    "bracingVolume": 1.6,
+    "damping": "heavyFill",
+    "port": {
+      "shape": "round",
+      "diameter": 68,
+      "length": 120,
+      "count": 1,
+      "flared": true,
+      "slotWidth": 50,
+      "slotHeight": 220
+    },
+    "passive": {
+      "enabled": true,
+      "diameter": 330,
+      "mass": 420,
+      "suspensionStiffness": 280,
+      "damping": 1.6
+    },
+    "driverCount": 1,
+    "wiring": "parallel",
+    "coilWiring": "parallel",
+    "driverMount": "flush"
+  },
+  "amplifier": {
+    "driveMode": "voltage",
+    "voltageRms": 2.83,
+    "powerW": 25,
+    "clipEnabled": false,
+    "clipVoltageRms": 14,
+    "currentLimitA": 0,
+    "outputImpedance": 0.05,
+    "bridged": false
+  },
+  "audio": {
+    "channel": "sum",
+    "band": "full",
+    "vizMode": "enhanced",
+    "vizMultiplier": 8,
+    "volume": 0.8,
+    "acousticOutput": false
+  },
+  "sim": {
+    "mode": "dynamic",
+    "speed": 1,
+    "running": true,
+    "paused": false
+  },
+  "customMaterials": [],
+  "id": "example_neth18pr",
+  "createdAt": "2026-10-09T11:09:15.286Z",
+  "modifiedAt": "2026-10-09T11:09:15.286Z"
+}

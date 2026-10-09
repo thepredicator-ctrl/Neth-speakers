@@ -20,7 +20,6 @@
 import { SyncClock } from './sync';
 import { zohDiscretize, type SystemModel } from '../physics/stateSpace';
 import type { AudioSettings } from '../physics/types';
-
 export type SourceKind = 'none' | 'file' | 'tone' | 'mic';
 
 export interface EngineSnapshot {
@@ -125,14 +124,16 @@ export class AudioEngine {
     if (!this.ctx || !this.master || !this.analyser || !this.chGainL || !this.chGainR) return false;
     this.disconnectSimNode();
     if (this.workletReady) {
+      // Discretize for THIS context's actual hardware rate (may be 44.1k/48k/96k).
+      const disc = zohDiscretize(this.system!.A, this.system!.B, 1 / this.ctx.sampleRate);
       const opts: AudioWorkletNodeOptions = {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         outputChannelCount: [2],
         processorOptions: {
-          n: this.system?.n ?? 3,
-          Ad: this.system ? new Float64Array(this.system.A.flat()) : [],
-          Bd: this.system ? new Float64Array(this.system.B) : [],
+          n: disc.n,
+          Ad: new Float64Array(disc.Ad.flat()),
+          Bd: new Float64Array(disc.Bd),
           cx: this.system ? new Float64Array(this.system.cx) : [],
           cv: this.system ? new Float64Array(this.system.cv) : [],
           ci: this.system ? new Float64Array(this.system.ci) : [],
@@ -212,12 +213,13 @@ export class AudioEngine {
     const changed = !this.system || this.system.n !== sys.n || force;
     this.system = sys;
     if (!this.ctx) return;
-    if (this.worklet && !changed && this.workletReady) {
-      // hot-swap matrices of the same dimension
+    if (this.worklet && !changed && this.workletReady && this.ctx) {
+      // hot-swap matrices of the same dimension (re-discretized at hw rate)
+      const disc = zohDiscretize(sys.A, sys.B, 1 / this.ctx.sampleRate);
       this.worklet.port.postMessage({
         type: 'system', n: sys.n,
-        Ad: new Float64Array(sys.A.flat()),
-        Bd: new Float64Array(sys.B),
+        Ad: new Float64Array(disc.Ad.flat()),
+        Bd: new Float64Array(disc.Bd),
         cx: new Float64Array(sys.cx),
         cv: new Float64Array(sys.cv),
         ci: new Float64Array(sys.ci),
@@ -327,6 +329,26 @@ export class AudioEngine {
   }
 
   playbackRate = 1;
+
+  /** Play a one-shot buffer (sweeps, noise, bursts) through the simulation node. */
+  async playBufferOnce(buf: AudioBuffer, onEnded?: () => void): Promise<void> {
+    await this.ensure();
+    if (!this.ctx || !this.inBus) return;
+    this.stopSources();
+    this.buildSimNode();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = this.playbackRate;
+    src.connect(this.inBus);
+    src.onended = () => {
+      if (this.source === src) this.source = null;
+      onEnded?.();
+    };
+    src.start();
+    this.source = src;
+    this.mode = 'file';
+    this.sync.play(this.ctx.currentTime, 0, this.playbackRate);
+  }
 
   setPlaybackRate(rate: number): void {
     this.playbackRate = Math.max(0.05, rate);

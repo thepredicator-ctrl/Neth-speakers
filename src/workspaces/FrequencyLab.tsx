@@ -106,9 +106,7 @@ export function FrequencyLab() {
         }
         buf = mk(s);
       }
-      engine.buildSimNodeForBuffer?.();
-      // route through the sim node: use the engine's playTrack-like path
-      engine.playBufferOnce(buf, () => setPlaying(false));
+      void engine.ensure().then(() => engine.playBufferOnce(buf, () => setPlaying(false)));
       setPlaying(true);
     } catch (e) {
       setGenErr(e instanceof Error ? e.message : String(e));

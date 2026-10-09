@@ -41,7 +41,7 @@ export function computeWinding(c: VoiceCoilParams, mats: (id: string) => Materia
 
   const windingHeightCalc = turnsPerLayer * pitch;
   const userH = c.windingHeight != null && c.windingHeight > 0;
-  const windingHeight = userH ? mm2m(c.windingHeight) : windingHeightCalc;
+  const windingHeight = userH ? mm2m(c.windingHeight as number) : windingHeightCalc;
 
   // Mean diameter per layer: first layer sits centred at windingDiameter,
   // each successive layer adds one wire diameter (centre-to-centre pitch).

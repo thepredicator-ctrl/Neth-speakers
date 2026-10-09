@@ -37,7 +37,6 @@ export function expm(A: Mat): Mat {
   const As = zeros(n);
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) As[i][j] = A[i][j] / Math.pow(2, s);
 
-  // Taylor series, 18 terms — enough for norm ≲ 1 after scaling.
   let E = identity(n);
   let term = identity(n);
   for (let k = 1; k <= 18; k++) {
@@ -61,47 +60,3 @@ export const cdiv = (a: Cx, b: Cx): Cx => {
 };
 export const cabs = (a: Cx) => Math.hypot(a.re, a.im);
 export const carg = (a: Cx) => Math.atan2(a.im, a.re);
-
-/** Invert a small complex matrix by Gauss-Jordan. Returns null if singular. */
-export function cinvert(M: Cx[][]): Cx[][] | null {
-  const n = M.length;
-  const A: Cx[][] = M.map((row, i) => row.map((v, j) => (i === j ? cplx(1) : cplx(0))).map((x, j2) => {
-    void j2;
-    return j === -1 ? x : x;
-  }));
-  // Build augmented [M | I]
-  const aug: Cx[][] = M.map((row) => row.slice());
-  for (let i = 0; i < n; i++) {
-    aug[i] = M[i].slice();
-    aug[i] = aug[i].concat([i === 0 ? cplx(1) : cplx(0)]);
-  }
-  // Simpler: operate on two arrays
-  const inv: Cx[][] = Array.from({ length: n }, (_, i) =>
-    Array.from({ length: n }, (_, j) => (i === j ? cplx(1) : cplx(0)))
-  );
-  const W: Cx[][] = M.map((r) => r.slice());
-  void A;
-  for (let col = 0; col < n; col++) {
-    // pivot
-    let piv = col;
-    let best = cabs(W[col][col]);
-    for (let r = col + 1; r < n; r++) {
-      const m2 = cabs(W[r][col]);
-      if (m2 > best) { best = m2; piv = r; }
-    }
-    if (best < 1e-300) return null;
-    if (piv !== col) { const t = W[col]; W[col] = W[piv]; W[piv] = t; const t2 = inv[col]; inv[col] = inv[piv]; inv[piv] = t2; }
-    const d = W[col][col];
-    for (let j = 0; j < n; j++) { W[col][j] = cdiv(W[col][j], d); inv[col][j] = cdiv(inv[col][j], d); }
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue;
-      const f = W[r][col];
-      if (f.re === 0 && f.im === 0) continue;
-      for (let j = 0; j < n; j++) {
-        W[r][j] = csub(W[r][j], cmul(f, W[col][j]));
-        inv[r][j] = csub(inv[r][j], cmul(f, inv[col][j]));
-      }
-    }
-  }
-  return inv;
-}

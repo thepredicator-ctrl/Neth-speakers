@@ -288,14 +288,14 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     color: surrMatDef?.color ?? '#17181c',
     roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
   });
-  const surround = lathe([[rSurfIn, 0]], seg, surroundMat);
+  const surround = lathe([[rSurfIn, 0], [rSurfIn + 0.002, 0]], seg, surroundMat);
   staticParts.add(surround); // geometry replaced per-frame; parented under static root for transforms
 
   const spiderMat = new THREE.MeshStandardMaterial({
     color: mats(p.spider.materialId)?.color ?? '#8a7a5c',
     roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
   });
-  const spider = lathe([[mm2m(p.spider.innerDiameter) / 2, ySpider]], seg, spiderMat);
+  const spider = lathe([[mm2m(p.spider.innerDiameter) / 2, ySpider], [mm2m(p.spider.outerDiameter) / 2, ySpider]], seg, spiderMat);
   staticParts.add(spider);
 
   const leadMat = new THREE.MeshStandardMaterial({ color: '#b87333', roughness: 0.5, metalness: 0.6 });

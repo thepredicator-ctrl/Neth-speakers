@@ -72,6 +72,13 @@ class SpeakerProcessor extends AudioWorkletProcessor {
     } else if (d.type === 'reset') {
       this.state.fill(0);
       this.hitLimit = false; this.clipFlag = false; this.iLimFlag = false;
+    } else if (d.type === 'debug') {
+      this.port.postMessage({
+        type: 'debug', n: this.n, adLen: this.Ad.length, bdLen: this.Bd.length,
+        ad0: Array.from(this.Ad.slice(0, 9)), bd0: Array.from(this.Bd),
+        cx: Array.from(this.cx), state: Array.from(this.state),
+        vpeak: this.vpeak, xIndex: this.xIndex, lastU: this.lastU, inCh: this.lastInCh,
+      });
     }
   }
 
@@ -121,7 +128,8 @@ class SpeakerProcessor extends AudioWorkletProcessor {
     const L = out[0].length;
     const dt = 1 / sampleRate;
     for (let i = 0; i < L; i++) {
-      let s = inCh ? inCh[i] : 0;
+      let s = inCh && inCh.length > 0 ? inCh[i] : 0;
+      if (!Number.isFinite(s)) s = 0; // guard against zero-length/unconnected input quanta
       if (s > 1) s = 1; else if (s < -1) s = -1;
       let u = s * this.vpeak;
       this.clipFlag = false;
@@ -131,6 +139,10 @@ class SpeakerProcessor extends AudioWorkletProcessor {
       }
       if (this.nl && this.n === 3) this.stepNonlinear(u, dt);
       else this.stepLinear(u);
+      // Self-heal: a non-finite state (bad input, hot-swap race) resets to rest.
+      if (!Number.isFinite(this.state[0]) || !Number.isFinite(this.state[this.xIndex]) || !Number.isFinite(this.state[this.vIndex])) {
+        this.state.fill(0);
+      }
 
       // Mechanical stop: clamp displacement, absorb velocity into the stop.
       let x = this.dot(this.cx);
@@ -148,6 +160,7 @@ class SpeakerProcessor extends AudioWorkletProcessor {
         cur = Math.sign(cur) * this.ilim;
       }
       this.lastX = x; this.lastV = this.dot(this.cv); this.lastI = cur;
+      this.lastU = u; this.lastInCh = inCh ? inCh.length : -1;
 
       if (this.acoustic && this.cp.length === this.n) {
         const p = this.dot(this.cp) * this.acousticGain;

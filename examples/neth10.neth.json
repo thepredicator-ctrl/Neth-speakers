@@ -1,0 +1,153 @@
+{
+  "app": "neth-speakers",
+  "version": 1,
+  "name": "Neth-10 Classic (8″ bass-mid)",
+  "savedAt": "2026-10-09T11:09:15.283Z",
+  "notes": "Balanced paper-cone 8″ woofer. The reference demo driver.",
+  "driver": {
+    "cone": {
+      "outerDiameter": 220,
+      "effectiveDiameter": 167,
+      "depth": 34,
+      "angleDeg": 65,
+      "thickness": 0.9,
+      "materialId": "paper",
+      "mass": null,
+      "profile": "straight",
+      "dustCapDiameter": 55,
+      "dustCapShape": "dome",
+      "dustCapMaterialId": "paper",
+      "dustCapMass": null,
+      "color": "#26221c",
+      "finish": "matte"
+    },
+    "surround": {
+      "innerDiameter": 220,
+      "outerDiameter": 246,
+      "rollCount": 1,
+      "rollHeight": 9,
+      "rollWidth": 13,
+      "materialId": "rubber-butyl",
+      "thickness": 1.2,
+      "stiffness": 520,
+      "damping": 0.55
+    },
+    "spider": {
+      "innerDiameter": 42,
+      "outerDiameter": 120,
+      "corrugations": 9,
+      "corrDepth": 3.2,
+      "materialId": "spider-cotton",
+      "thickness": 0.35,
+      "stiffness": 1080,
+      "damping": 0.85
+    },
+    "coil": {
+      "windingDiameter": 51,
+      "formerDiameter": 49.4,
+      "formerHeight": 26,
+      "formerMaterialId": "former-kapton",
+      "formerThickness": 0.25,
+      "wireDiameter": 0.45,
+      "wireMaterialId": "copper",
+      "layers": 4,
+      "turnsPerLayer": 34,
+      "windingHeight": null,
+      "temperatureC": 30,
+      "config": "overhung",
+      "position": 0,
+      "mass": null,
+      "re": null,
+      "le": null
+    },
+    "magnet": {
+      "materialId": "ferrite-y30",
+      "count": 1,
+      "diameter": 120,
+      "innerDiameter": 52,
+      "thickness": 18,
+      "poleDiameter": 50,
+      "topPlateDiameter": 110,
+      "topPlateThickness": 7,
+      "backPlateDiameter": 120,
+      "backPlateThickness": 8,
+      "gapWidth": 1,
+      "leakageFactor": 2.2,
+      "bl": null,
+      "bGap": null
+    },
+    "frame": {
+      "depth": 92,
+      "gasketThickness": 1.5,
+      "terminals": "push",
+      "tinselLeads": 2,
+      "mountingHoles": 4,
+      "materialId": "steel"
+    },
+    "blDropAtXmech": 0.25,
+    "kmsRiseAtXmax": 0.6,
+    "rmsOverride": null,
+    "qmsTarget": 5.2,
+    "xmechOverride": null,
+    "xmaxOverride": null,
+    "vasOverride": null
+  },
+  "enclosure": {
+    "type": "sealed",
+    "internalWidth": 340,
+    "internalHeight": 380,
+    "internalDepth": 300,
+    "wallThickness": 18,
+    "wallMaterialId": "mdf",
+    "bracingVolume": 0.6,
+    "damping": "lined",
+    "port": {
+      "shape": "round",
+      "diameter": 68,
+      "length": 120,
+      "count": 1,
+      "flared": true,
+      "slotWidth": 50,
+      "slotHeight": 220
+    },
+    "passive": {
+      "enabled": false,
+      "diameter": 220,
+      "mass": 220,
+      "suspensionStiffness": 350,
+      "damping": 1.2
+    },
+    "driverCount": 1,
+    "wiring": "parallel",
+    "coilWiring": "parallel",
+    "driverMount": "flush"
+  },
+  "amplifier": {
+    "driveMode": "voltage",
+    "voltageRms": 2.83,
+    "powerW": 25,
+    "clipEnabled": false,
+    "clipVoltageRms": 14,
+    "currentLimitA": 0,
+    "outputImpedance": 0.05,
+    "bridged": false
+  },
+  "audio": {
+    "channel": "sum",
+    "band": "full",
+    "vizMode": "enhanced",
+    "vizMultiplier": 8,
+    "volume": 0.8,
+    "acousticOutput": false
+  },
+  "sim": {
+    "mode": "dynamic",
+    "speed": 1,
+    "running": true,
+    "paused": false
+  },
+  "customMaterials": [],
+  "id": "example_neth10",
+  "createdAt": "2026-10-09T11:09:15.283Z",
+  "modifiedAt": "2026-10-09T11:09:15.283Z"
+}

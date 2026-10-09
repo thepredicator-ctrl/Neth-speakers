@@ -253,7 +253,7 @@ export function computeEnclosure(
 
 /** Run the ZOH-discretized system over a sample array; returns displacement per sample. */
 export function runDiscrete(
-  A: number[][], B: number[], u: Float32Array | number[]
+  A: number[][], B: number[], u: Float32Array | Float64Array | number[]
 ): { x: Float64Array; v: Float64Array; i: Float64Array } {
   const { Ad, Bd, n } = zohDiscretize(A, B, 1 / 48000);
   const state = new Float64Array(n);
