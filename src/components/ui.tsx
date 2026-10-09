@@ -1,5 +1,6 @@
 /* Shared UI primitives: buttons, sliders with numeric input, badges, sections. */
 import React, { useState } from 'react';
+import { isAppleTouchPlatform } from '../utils/platform';
 
 export function Btn(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'ghost' | 'danger'; active?: boolean; small?: boolean; ghost?: boolean; danger?: boolean }) {
   const { variant, active, small, ghost, danger, className = '', ...rest } = props;
@@ -136,6 +137,11 @@ export function XBar(props: { xMm: number; xmax: number; xmech: number }) {
 
 export function FileDrop(props: { onFile: (f: File) => void; label: string; accept?: string }) {
   const [over, setOver] = useState(false);
+  // Apple's file pickers grey out MP3/WAV files when accept="audio/*" is set
+  // (a long-standing iPadOS UTI-matching bug) and the media options only offer
+  // videos. Omitting accept lets EVERYTHING be selected from the Files browser;
+  // we validate by actually decoding the file instead of trusting extensions.
+  const appleTouch = isAppleTouchPlatform();
   return (
     <label
       className={`drop${over ? ' over' : ''}`}
@@ -147,9 +153,23 @@ export function FileDrop(props: { onFile: (f: File) => void; label: string; acce
         if (f) props.onFile(f);
       }}
     >
-      <input type="file" accept={props.accept} style={{ display: 'none' }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onFile(f); }} />
+      <input
+        type="file"
+        accept={appleTouch ? undefined : props.accept}
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) props.onFile(f);
+          // Reset so picking the SAME file again still fires onChange.
+          e.target.value = '';
+        }}
+      />
       {props.label}
+      {appleTouch ? (
+        <span className="note" style={{ display: 'block', marginTop: 4 }}>
+          iPad / iPhone: tap “Choose File”, then pick your audio from Files — every file is selectable.
+        </span>
+      ) : null}
     </label>
   );
 }

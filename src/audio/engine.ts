@@ -20,6 +20,7 @@
 import { SyncClock } from './sync';
 import { zohDiscretize, type SystemModel } from '../physics/stateSpace';
 import type { AudioSettings } from '../physics/types';
+import { isSafariLike } from '../utils/platform';
 export type SourceKind = 'none' | 'file' | 'tone' | 'mic';
 
 export interface EngineSnapshot {
@@ -41,6 +42,37 @@ export interface DecodedTrack {
 }
 
 const PEAK_BUCKETS = 1600;
+
+/** Read a File to ArrayBuffer — uses file.arrayBuffer() where available and
+ *  falls back to FileReader for older iOS/Safari versions. */
+async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as ArrayBuffer);
+    fr.onerror = () => reject(new Error(fr.error?.message || 'Could not read the file'));
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+/** decodeAudioData that works on every engine: older Safari only supports the
+ *  callback form (promise version added in Safari 14.1). Both paths resolve
+ *  the same promise; double-settling is harmless. */
+function decodeCompat(ctx: BaseAudioContext, buf: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const ok = (b: AudioBuffer) => { if (!settled) { settled = true; resolve(b); } };
+    const fail = (e: unknown) => { if (!settled) { settled = true; reject(e instanceof Error ? e : new Error('decode failed')); } };
+    try {
+      const ret = ctx.decodeAudioData(buf, ok, fail) as unknown;
+      if (ret && typeof (ret as Promise<AudioBuffer>).then === 'function') {
+        (ret as Promise<AudioBuffer>).then(ok, fail);
+      }
+    } catch (e) {
+      fail(e);
+    }
+  });
+}
 
 export class AudioEngine {
   ctx: AudioContext | null = null;
@@ -320,23 +352,26 @@ export class AudioEngine {
   async decodeFile(file: File): Promise<DecodedTrack> {
     await this.ensure();
     if (!this.ctx) throw new Error('AudioContext unavailable');
-    const raw = await file.arrayBuffer();
+    const raw = await fileToArrayBuffer(file);
     // Decode chain: live context → fresh OfflineAudioContext. Some browsers
     // refuse decodeAudioData on a suspended/context-limited instance; the
-    // offline fallback recovers without any user-visible state.
+    // offline fallback recovers without any user-visible state. The callback
+    // form of decodeAudioData is used because older Safari rejects promises.
     let buffer: AudioBuffer;
     try {
-      buffer = await this.ctx.decodeAudioData(raw.slice(0));
+      buffer = await decodeCompat(this.ctx, raw.slice(0));
     } catch (e1) {
       try {
         const OC = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
         const off = new OC(2, 44100, 44100);
-        buffer = await off.decodeAudioData(raw.slice(0));
+        buffer = await decodeCompat(off, raw.slice(0));
       } catch {
         const kind = (file.type || '').replace('audio/', '') || file.name.split('.').pop() || 'audio';
+        const safariHint = isSafariLike()
+          ? ' Safari cannot decode OGG/Opus or WMA — use MP3, M4A/AAC, WAV or FLAC.'
+          : ' Try MP3, WAV, M4A, OGG or FLAC — or re-encode the file at 44.1/48 kHz.';
         throw new Error(
-          `This browser could not decode the ${kind.toUpperCase()} file (unsupported codec or damaged data). ` +
-          'Try MP3, WAV, OGG or FLAC — or re-encode the file at 44.1/48 kHz.'
+          `This browser could not decode the ${kind.toUpperCase()} file (unsupported codec or damaged data).${safariHint}`
         );
       }
     }

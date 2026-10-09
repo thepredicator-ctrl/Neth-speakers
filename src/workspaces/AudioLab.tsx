@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
 import { engine, type DecodedTrack } from '../audio/engine';
+import { isSafariLike, AUDIO_FILE_ACCEPT } from '../utils/platform';
 import { Section, Btn, Param, Sel, Badge, FileDrop, XBar } from '../components/ui';
 import { Plot } from '../components/Plot';
 import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
@@ -27,6 +28,7 @@ export function AudioLab() {
   const [pos, setPos] = useState(0);
   const [loop, setLoop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const safari = isSafariLike();
   const [eng, setEng] = useState(engine.status());
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [hist, setHist] = useState<[number, number][]>([]);
@@ -195,7 +197,7 @@ export function AudioLab() {
               ) : null}
             </div>
             {!track ? (
-              <FileDrop onFile={loadFile} accept="audio/*" label="Drop MP3/WAV/OGG/FLAC here — or click to browse. Files stay on your device." />
+              <FileDrop onFile={loadFile} accept={AUDIO_FILE_ACCEPT} label="Drop audio here — MP3 · WAV · M4A · FLAC · OGG. Files stay on your device." />
             ) : (
               <>
                 <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -205,10 +207,15 @@ export function AudioLab() {
                   </div>
                   <Btn small ghost onClick={() => { stop(); setTrack(null); }}>Clear</Btn>
                 </div>
-                <FileDrop onFile={loadFile} accept="audio/*" label="Replace track…" />
+                <FileDrop onFile={loadFile} accept={AUDIO_FILE_ACCEPT} label="Replace track…" />
               </>
             )}
             {err ? <div className="warnbox" style={{ marginTop: 8 }}>{err}</div> : null}
+            {!track && safari ? (
+              <p className="note" style={{ marginTop: 6 }}>
+                Safari tip: OGG/Opus files are not decodable on Apple platforms — use MP3, M4A/AAC, WAV or FLAC.
+              </p>
+            ) : null}
           </Section>
 
           <Section title="Transport">
