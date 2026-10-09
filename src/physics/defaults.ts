@@ -33,9 +33,10 @@ export function defaultDriver(): DriverParams {
       thickness: 1.2,
       stiffness: 520,            // N/m
       damping: 0.55,             // N·s/m
+      color: '#17181c',
     },
     spider: {
-      innerDiameter: 42,
+      innerDiameter: 50,
       outerDiameter: 120,
       corrugations: 9,
       corrDepth: 3.2,
@@ -43,6 +44,7 @@ export function defaultDriver(): DriverParams {
       thickness: 0.35,
       stiffness: 1080,           // N/m
       damping: 0.85,             // N·s/m
+      color: '#8a7a5c',
     },
     coil: {
       windingDiameter: 51.0,
@@ -77,6 +79,7 @@ export function defaultDriver(): DriverParams {
       leakageFactor: 2.2,        // typical for ferrite ring structures (1.8–2.8)
       bl: null,
       bGap: null,
+      painted: false,
     },
     frame: {
       depth: 92,
@@ -85,6 +88,9 @@ export function defaultDriver(): DriverParams {
       tinselLeads: 2,
       mountingHoles: 4,
       materialId: 'steel',
+      color: '#33363c',
+      style: 'stamped',
+      gasket: true,
     },
     blDropAtXmech: 0.25,
     kmsRiseAtXmax: 0.6,
@@ -118,6 +124,8 @@ export function defaultEnclosure(): EnclosureParams {
     wiring: 'parallel',
     coilWiring: 'parallel',
     driverMount: 'flush',
+    finishColor: '#7a5c3e',
+    grille: { enabled: false, color: '#141414' },
   };
 }
 
@@ -146,7 +154,7 @@ export function defaultAudio(): AudioSettings {
 }
 
 export function defaultSim(): SimSettings {
-  return { mode: 'dynamic', speed: 1, running: true, paused: false };
+  return { mode: 'dynamic', speed: 1, running: true, paused: false, quality: 'precision', vizSmoothing: 0.35 };
 }
 
 /* ---------------------------------------------------------------------------
@@ -170,7 +178,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.outerDiameter = 270; d.cone.effectiveDiameter = 220; d.cone.depth = 42; d.cone.thickness = 1.6;
       d.cone.dustCapDiameter = 80; d.cone.profile = 'curved'; d.cone.materialId = 'polypropylene';
       d.surround.innerDiameter = 270; d.surround.outerDiameter = 306; d.surround.rollHeight = 15; d.surround.rollWidth = 18; d.surround.stiffness = 420; d.surround.damping = 0.8;
-      d.spider.innerDiameter = 62; d.spider.outerDiameter = 160; d.spider.corrugations = 11; d.spider.corrDepth = 5.5; d.spider.stiffness = 900; d.spider.damping = 1.4; d.spider.materialId = 'spider-nomex';
+      d.spider.innerDiameter = 64; d.spider.outerDiameter = 160; d.spider.corrugations = 11; d.spider.corrDepth = 5.5; d.spider.stiffness = 900; d.spider.damping = 1.4; d.spider.materialId = 'spider-nomex';
       d.coil.windingDiameter = 64.4; d.coil.formerDiameter = 62.6; d.coil.formerHeight = 40; d.coil.wireDiameter = 0.6; d.coil.layers = 4; d.coil.turnsPerLayer = 42; d.coil.formerMaterialId = 'former-alu';
       d.magnet.materialId = 'ferrite-y35'; d.magnet.diameter = 170; d.magnet.innerDiameter = 66; d.magnet.thickness = 25; d.magnet.poleDiameter = 63.5; d.magnet.topPlateThickness = 9; d.magnet.backPlateThickness = 12; d.magnet.backPlateDiameter = 170; d.magnet.topPlateDiameter = 160; d.magnet.gapWidth = 1.2; d.magnet.leakageFactor = 1.75;
       d.frame.depth = 130;
@@ -187,7 +195,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.outerDiameter = 145; d.cone.effectiveDiameter = 118; d.cone.depth = 22; d.cone.thickness = 0.7;
       d.cone.dustCapDiameter = 38; d.cone.materialId = 'polypropylene';
       d.surround.innerDiameter = 145; d.surround.outerDiameter = 165; d.surround.rollHeight = 7; d.surround.rollWidth = 10; d.surround.stiffness = 700;
-      d.spider.innerDiameter = 32; d.spider.outerDiameter = 90; d.spider.corrugations = 7; d.spider.corrDepth = 2.4; d.spider.stiffness = 1400;
+      d.spider.innerDiameter = 36; d.spider.outerDiameter = 90; d.spider.corrugations = 7; d.spider.corrDepth = 2.4; d.spider.stiffness = 1400;
       d.coil.windingDiameter = 35.5; d.coil.formerDiameter = 34.2; d.coil.formerHeight = 16; d.coil.wireDiameter = 0.35; d.coil.layers = 2; d.coil.turnsPerLayer = 38;
       d.magnet.diameter = 100; d.magnet.innerDiameter = 37; d.magnet.thickness = 15; d.magnet.poleDiameter = 35.2; d.magnet.topPlateThickness = 5; d.magnet.topPlateDiameter = 90; d.magnet.backPlateDiameter = 100; d.magnet.gapWidth = 0.9;
       d.frame.depth = 72;

@@ -80,7 +80,12 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const magMatDef = mats(p.magnet.materialId);
   const steelMat = new THREE.MeshStandardMaterial({ color: '#5b6068', roughness: 0.55, metalness: 0.75, side: THREE.DoubleSide });
   const poleMat = new THREE.MeshStandardMaterial({ color: '#6a6f77', roughness: 0.5, metalness: 0.8, side: THREE.DoubleSide });
-  const frameMat = new THREE.MeshStandardMaterial({ color: '#33363c', roughness: 0.6, metalness: 0.6, side: THREE.DoubleSide });
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: (p.frame as { color?: string }).color ?? '#33363c',
+    roughness: (p.frame as { style?: string }).style === 'diecast' ? 0.5 : 0.6,
+    metalness: (p.frame as { style?: string }).style === 'diecast' ? 0.7 : 0.55,
+    side: THREE.DoubleSide,
+  });
   const formerMat = new THREE.MeshStandardMaterial({ color: mats(p.coil.formerMaterialId)?.color ?? '#6b4d1e', roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
   const copper = new THREE.MeshStandardMaterial({
     map: windingTexture(coilMatDef?.id === 'aluminium-wire' ? '#c8ccd2' : '#b87333'),
@@ -91,6 +96,9 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     roughness: 0.85, metalness: magMatDef?.category === 'magnet' && magMatDef.id.startsWith('neo') ? 0.5 : 0.1,
     side: THREE.DoubleSide,
   });
+  const paintedMat = new THREE.MeshStandardMaterial({ color: '#191a1d', roughness: 0.7, metalness: 0.25, side: THREE.DoubleSide });
+  const plateMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : steelMat;
+  const poleUseMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : poleMat;
 
   /* ---------- key radii ---------- */
   const rConeOut = mm2m(p.cone.outerDiameter) / 2;
@@ -158,7 +166,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     new THREE.CylinderGeometry(rFormer + fT, rFormer + fT, formerH, seg, 1, true),
     formerMat
   );
-  const yFormerTop = yConeInner + mm2m(2);
+  const yFormerTop = yConeInner + mm2m(0.5); // flush with the cone junction — nothing pokes through
   former.position.y = yFormerTop - formerH / 2;
   moving.add(former);
 
@@ -166,11 +174,15 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const layers = Math.max(1, Math.min(4, Math.round(p.coil.layers)));
   const turns = Math.max(1, Math.round(p.coil.turnsPerLayer));
   const pitch = mm2m(p.coil.wireDiameter) * 1.08;
-  const windH = Math.min(turns * pitch, formerH * 0.92);
+  // AUTO-BALANCE (visual): winding stays ≥ 2.5 mm below the former top and
+  // never pokes through the cone junction.
+  const windTopLimit = formerH - Math.max(mm2m(2.5), formerH * 0.1);
+  const windH = Math.min(turns * pitch, windTopLimit, formerH * 0.92);
   const yWindTop = yFormerTop - mm2m(2.5) - (p.coil.position / 1000);
   for (let L = 0; L < layers; L++) {
     const rIn = rFormer + fT + wireR + L * mm2m(p.coil.wireDiameter);
-    const h = windH - (L > 0 ? 0 : 0);
+    const h = Math.min(windH, yWindTop - (yFormerTop - formerH));
+    if (h <= 0) continue;
     const cyl = new THREE.Mesh(
       new THREE.CylinderGeometry(rIn + wireR * 0.02, rIn + wireR * 0.02, h, seg, 1, true),
       copper
@@ -187,9 +199,10 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const rBackOD = mm2m(p.magnet.backPlateDiameter) / 2;
   const gapWR = mm2m(p.magnet.gapWidth);
 
-  // pole piece: rises from backplate through magnet into the gap
-  const poleTop = yGapC + Math.max(gapH * 0.1, mm2m(1));
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(rPole, rPole * 1.04, poleTop - yBackTop + backThk, seg), poleMat);
+  // pole piece: rises from backplate through magnet into the gap; top is flush
+  // with the top-plate top face — nothing protrudes into the coil cavity.
+  const poleTop = yTopPlateTop;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(rPole, rPole * 1.04, poleTop - yBackTop + backThk, seg), poleUseMat);
   pole.position.y = (poleTop + yBackTop - backThk) / 2;
   staticParts.add(pole);
 
@@ -199,7 +212,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     [rTopOD, yTopPlateTop],
     [rTopOD, yTopPlateTop - gapH],
     [rPole + gapWR, yTopPlateTop - gapH],
-  ], seg, steelMat);
+  ], seg, plateMat);
   staticParts.add(topPlate);
 
   // magnet ring(s)
@@ -220,7 +233,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     [rBackOD, yBackTop],
     [rBackOD, yBackBottom],
     [mm2m(3), yBackBottom],
-  ], seg, steelMat);
+  ], seg, plateMat);
   staticParts.add(backPlate);
 
   /* ---------- frame / basket ---------- */
@@ -233,27 +246,37 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   ], seg, frameMat);
   staticParts.add(frontFlange);
 
-  // gasket
-  const gasket = new THREE.Mesh(
-    new THREE.TorusGeometry(rFrameOut - mm2m(2.6), mm2m(p.frame.gasketThickness) / 2, 10, seg),
-    new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.95 })
-  );
-  gasket.rotation.x = Math.PI / 2;
-  gasket.position.y = ySeat + mm2m(p.frame.gasketThickness) / 2 + mm2m(1.4);
-  staticParts.add(gasket);
+  // gasket (optional)
+  if ((p.frame as { gasket?: boolean }).gasket !== false) {
+    const gasket = new THREE.Mesh(
+      new THREE.TorusGeometry(rFrameOut - mm2m(2.6), mm2m(p.frame.gasketThickness) / 2, 10, seg),
+      new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.95 })
+    );
+    gasket.rotation.x = Math.PI / 2;
+    gasket.position.y = ySeat + mm2m(p.frame.gasketThickness) / 2 + mm2m(1.4);
+    staticParts.add(gasket);
+  }
 
-  // struts (4-8)
-  const nStruts = 6;
-  const strutLen = yFrameRear - (ySeat - flangeW);
+  // struts: tapered basket legs slanting from the flange underside down to the
+  // rear ring — each oriented along the actual connection line so they always
+  // connect the two rings (never float, never poke through the cone).
+  const nStruts = (p.frame as { style?: string }).style === 'diecast' ? 5 : 6;
+  const legW = (p.frame as { style?: string }).style === 'diecast' ? mm2m(14) : mm2m(9);
+  const yTop = ySeat - flangeW;
+  const rLegTop = rFrameOut - mm2m(4);
+  const rLegBot = rBackOD + mm2m(6);
   for (let i = 0; i < nStruts; i++) {
-    const ang = (i / nStruts) * Math.PI * 2;
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(mm2m(9), strutLen, mm2m(4.5)), frameMat);
-    const rTop = rFrameOut - mm2m(4);
-    const rBot = rBackOD + mm2m(6);
-    strut.position.set(Math.cos(ang) * (rTop + rBot) / 2, ySeat - flangeW - strutLen / 2, Math.sin(ang) * (rTop + rBot) / 2);
-    strut.lookAt(new THREE.Vector3(0, strut.position.y, 0));
-    strut.rotateY(Math.PI / 2);
-    staticParts.add(strut);
+    const ang = (i / nStruts) * Math.PI * 2 + Math.PI / nStruts;
+    const a = new THREE.Vector3(Math.cos(ang) * rLegTop, yTop, Math.sin(ang) * rLegTop);
+    const b = new THREE.Vector3(Math.cos(ang) * rLegBot, yFrameRear + mm2m(2), Math.sin(ang) * rLegBot);
+    const len = a.distanceTo(b);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(legW, len, mm2m(4.5)), frameMat);
+    leg.position.copy(a).add(b).multiplyScalar(0.5);
+    // orient the box's +Y axis along (b - a)
+    const dir = new THREE.Vector3().subVectors(b, a).normalize();
+    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    leg.userData.explodedGroup = 'frame';
+    staticParts.add(leg);
   }
 
   // rear ring + spider shelf
@@ -285,14 +308,14 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   /* ---------- deformables ---------- */
   const surrMatDef = mats(p.surround.materialId);
   const surroundMat = new THREE.MeshStandardMaterial({
-    color: surrMatDef?.color ?? '#17181c',
+    color: (p.surround as { color?: string }).color ?? surrMatDef?.color ?? '#17181c',
     roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
   });
   const surround = lathe([[rSurfIn, 0], [rSurfIn + 0.002, 0]], seg, surroundMat);
   staticParts.add(surround); // geometry replaced per-frame; parented under static root for transforms
 
   const spiderMat = new THREE.MeshStandardMaterial({
-    color: mats(p.spider.materialId)?.color ?? '#8a7a5c',
+    color: (p.spider as { color?: string }).color ?? mats(p.spider.materialId)?.color ?? '#8a7a5c',
     roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
   });
   const spider = lathe([[mm2m(p.spider.innerDiameter) / 2, ySpider], [mm2m(p.spider.outerDiameter) / 2, ySpider]], seg, spiderMat);
@@ -357,9 +380,10 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     spider.geometry.dispose();
     spider.geometry = new THREE.LatheGeometry(spts, seg);
 
-    // --- tinsel leads ---
-    const rAttach = rConeOut * 0.86;
-    const yAttach = ySeat + x - mm2m(6);
+    // --- tinsel leads: attached at the cone INNER surface, routed INSIDE the
+    // basket to the terminals — never crossing the surround or frame. ---
+    const rAttach = rConeIn + mm2m(3);
+    const yAttach = yConeInner + mm2m(3) + x;
     const yTerm = yFrameRear + mm2m(2);
     for (let i = 0; i < leadMeshes.length; i++) {
       const ang = Math.PI * (0.25 + 0.5 * i / Math.max(1, leadMeshes.length - 1));
@@ -367,7 +391,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       const tx = Math.cos(ang) * (rBackOD + mm2m(10)), tz = Math.sin(ang) * (rBackOD + mm2m(10));
       const curve = new THREE.QuadraticBezierCurve3(
         new THREE.Vector3(ax, yAttach, az),
-        new THREE.Vector3(ax * 0.72 + tx * 0.28, (yAttach + yTerm) / 2 - mm2m(10), az * 0.72 + tz * 0.28),
+        new THREE.Vector3(ax * 0.55 + tx * 0.45, (yAttach + yTerm) / 2 - mm2m(4), az * 0.55 + tz * 0.45),
         new THREE.Vector3(tx, yTerm, tz)
       );
       const g = new THREE.TubeGeometry(curve, 14, mm2m(0.55), 6, false);
@@ -413,7 +437,8 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
   const t = mm2m(enc.wallThickness);
 
   const wallMat = new THREE.MeshStandardMaterial({
-    color: mats_enc_color(enc), roughness: 0.85, metalness: 0.02,
+    color: (enc as { finishColor?: string }).finishColor || mats_enc_color(enc),
+    roughness: 0.85, metalness: 0.02,
     transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false,
   });
   const edgeMat = new THREE.LineBasicMaterial({ color: '#3a3f49', transparent: true, opacity: 0.7 });
@@ -426,20 +451,50 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
   // front baffle hole indication: driver sits on front face; shift box so front face at y=0
   group.position.y = -D / 2 + t / 2;
 
-  // port tube
+  // port tube(s) — length clamped to the internal depth so nothing protrudes
   if (enc.type === 'ported') {
     const portMat = new THREE.MeshStandardMaterial({ color: '#20232a', roughness: 0.6, side: THREE.DoubleSide });
+    const flareMat = new THREE.MeshStandardMaterial({ color: '#191b20', roughness: 0.75, side: THREE.DoubleSide });
     const count = Math.max(1, Math.min(4, enc.port.count));
+    const maxLen = D - 2 * t - mm2m(5);
     for (let i = 0; i < count; i++) {
       const r = mm2m(enc.port.diameter) / 2;
-      const len = mm2m(enc.port.length);
+      const len = Math.min(mm2m(enc.port.length), maxLen);
       const tube = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, quality === 'low' ? 20 : 40, 1, true), portMat);
       const ang = count === 1 ? 0 : (i / (count - 1) - 0.5) * Math.PI * 0.7;
       tube.position.set(Math.sin(ang) * W * 0.3, -len / 2 + t, Math.cos(ang) * H * 0.28);
       tube.rotation.y = -ang * 0.4;
       group.add(tube);
+      if (enc.port.flared) {
+        // flare ring on the baffle side
+        const flare = new THREE.Mesh(new THREE.TorusGeometry(r * 1.12, Math.max(r * 0.1, mm2m(2)), 10, quality === 'low' ? 24 : 40), flareMat);
+        flare.rotation.x = Math.PI / 2;
+        flare.position.set(tube.position.x, t + mm2m(0.5), tube.position.z);
+        group.add(flare);
+      }
       void r; void len;
     }
+  }
+
+  // front grille (optional): a slim mesh disc just in front of the driver
+  if ((enc as { grille?: { enabled?: boolean; color?: string } }).grille?.enabled) {
+    const gColor = (enc as { grille?: { color?: string } }).grille?.color ?? '#141414';
+    const grilleMat = new THREE.MeshStandardMaterial({
+      color: gColor, roughness: 0.8, metalness: 0.1,
+      transparent: true, opacity: 0.32, side: THREE.DoubleSide,
+    });
+    const rG = mm2m(driver.surround.outerDiameter) / 2 + mm2m(10);
+    const grille = new THREE.Mesh(new THREE.CircleGeometry(rG, quality === 'low' ? 32 : 56), grilleMat);
+    grille.rotation.x = -Math.PI / 2;
+    grille.position.y = mm2m(14);
+    group.add(grille);
+    const grilleRing = new THREE.Mesh(
+      new THREE.TorusGeometry(rG, mm2m(4), 8, quality === 'low' ? 32 : 56),
+      new THREE.MeshStandardMaterial({ color: gColor, roughness: 0.6, metalness: 0.3 })
+    );
+    grilleRing.rotation.x = Math.PI / 2;
+    grilleRing.position.y = mm2m(13);
+    group.add(grilleRing);
   }
 
   // passive radiator on the rear wall

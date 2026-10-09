@@ -68,6 +68,22 @@ export function Simulator3D() {
             ) : null}
           </Section>
 
+          <Section title="Simulation Settings">
+            <Sel
+              label="Solver quality" value={sim.quality}
+              options={[{ value: 'precision', label: 'Precision (8 substeps)' }, { value: 'balanced', label: 'Balanced (4)' }, { value: 'fast', label: 'Fast (2)' }]}
+              onChange={(v) => patchSim({ quality: v as typeof sim.quality })}
+              hint="Substeps per audio sample in the real-time model. Precision is the default — the linear ZOH core is exact and unconditionally stable at any setting."
+            />
+            <Sel
+              label="Model mode" value={sim.mode}
+              options={[{ value: 'idealized', label: 'Idealized' }, { value: 'thieleSmall', label: 'Thiele-Small' }, { value: 'dynamic', label: 'Dynamic (recommended)' }, { value: 'advanced', label: 'Advanced (nonlinear)' }]}
+              onChange={(v) => patchSim({ mode: v as typeof sim.mode })}
+            />
+            <Param label="Display smoothing" value={sim.vizSmoothing} min={0} max={0.9} step={0.05} digits={2} unit="" onChange={(v) => patchSim({ vizSmoothing: v })} hint="Smooths the RENDERED motion only — measured values stay unfiltered" />
+            <p className="note">The linear model is solved by exact ZOH discretization at the hardware sample rate — stable for any parameter combination. Quality only affects nonlinear substep depth.</p>
+          </Section>
+
           <Section title="Test Signal">
             <div className="row">
               {[20, 40, 60, 120].map((f) => (

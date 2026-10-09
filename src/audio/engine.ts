@@ -73,6 +73,41 @@ export class AudioEngine {
   usingFallback = false;
   onSnapshot: ((s: EngineSnapshot) => void) | null = null;
 
+  /** Resume the context; never throws. Returns true when running. */
+  async resumeSafely(): Promise<boolean> {
+    if (!this.ctx) return false;
+    try {
+      if (this.ctx.state !== 'running') await this.ctx.resume();
+    } catch { /* gesture/permission restrictions — retried on next gesture */ }
+    return this.ctx.state === 'running';
+  }
+
+  /** One-shot global gesture listener: browsers create the AudioContext
+   *  'suspended' unless a gesture is in progress. The first tap anywhere
+   *  unlocks audio — the user never has to understand why it was silent. */
+  private autoResumeInstalled = false;
+  private installAutoResume(): void {
+    if (this.autoResumeInstalled) return;
+    this.autoResumeInstalled = true;
+    const kick = () => {
+      if (this.ctx && this.ctx.state !== 'running') void this.resumeSafely();
+    };
+    const opts = { passive: true } as AddEventListenerOptions;
+    window.addEventListener('pointerdown', kick, opts);
+    window.addEventListener('keydown', kick, opts);
+    window.addEventListener('touchstart', kick, opts);
+  }
+
+  /** Diagnostics for the UI status chip. */
+  status(): { ctxState: string; worklet: boolean; fallback: boolean; sampleRate: number } {
+    return {
+      ctxState: this.ctx?.state ?? 'none',
+      worklet: this.workletReady,
+      fallback: this.usingFallback,
+      sampleRate: this.ctx?.sampleRate ?? 0,
+    };
+  }
+
   // rolling displacement history for the Audio Lab timeline (decimated)
   private hist: Float32Array = new Float32Array(2048);
   private histIdx = 0;
@@ -81,12 +116,14 @@ export class AudioEngine {
 
   async ensure(): Promise<boolean> {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') await this.ctx.resume();
+      if (this.ctx.state === 'suspended') await this.resumeSafely();
       return this.workletReady || this.usingFallback;
     }
     const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctor({ latencyHint: 'interactive' });
     this.ctx = ctx;
+    this.installAutoResume();
+    if (ctx.state === 'suspended') await this.resumeSafely();
     this.master = ctx.createGain();
     this.master.gain.value = this.settings?.volume ?? 0.8;
     this.analyser = ctx.createAnalyser();
@@ -284,7 +321,28 @@ export class AudioEngine {
     await this.ensure();
     if (!this.ctx) throw new Error('AudioContext unavailable');
     const raw = await file.arrayBuffer();
-    const buffer = await this.ctx.decodeAudioData(raw);
+    // Decode chain: live context → fresh OfflineAudioContext. Some browsers
+    // refuse decodeAudioData on a suspended/context-limited instance; the
+    // offline fallback recovers without any user-visible state.
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.ctx.decodeAudioData(raw.slice(0));
+    } catch (e1) {
+      try {
+        const OC = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
+        const off = new OC(2, 44100, 44100);
+        buffer = await off.decodeAudioData(raw.slice(0));
+      } catch {
+        const kind = (file.type || '').replace('audio/', '') || file.name.split('.').pop() || 'audio';
+        throw new Error(
+          `This browser could not decode the ${kind.toUpperCase()} file (unsupported codec or damaged data). ` +
+          'Try MP3, WAV, OGG or FLAC — or re-encode the file at 44.1/48 kHz.'
+        );
+      }
+    }
+    if (!buffer || !(buffer.duration > 0)) {
+      throw new Error('Decoded audio is empty — the file may be corrupt.');
+    }
     const buckets = PEAK_BUCKETS;
     const peaksL = new Float32Array(buckets * 2);
     const peaksR = new Float32Array(buckets * 2);

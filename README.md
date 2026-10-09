@@ -27,6 +27,16 @@ curve in the app.
 
 Every control affects the underlying model — there are no fake controls.
 
+## Self-balancing design
+
+Every parameter you edit passes through a physics sanitizer (`src/physics/validate.ts`):
+NaN or out-of-range values are replaced with safe ones, and interdependent values
+re-balance automatically — the surround always lands on the cone edge, the coil
+always fits the magnetic gap, the magnet always covers the top plate, the spider
+always bonds to the former, the frame always houses the motor, the port always fits
+the box, and Xmax can never exceed Xmech. It is impossible to break the simulation
+by typing extreme values; the design bends instead of breaking.
+
 ## Quick start
 
 ```bash
@@ -129,7 +139,7 @@ typical literature figures flagged `illustrative`.
 npm test
 ```
 
-31 automated tests cover the acceptance list: T-S relations vs analytical
+48 automated tests cover the acceptance list: T-S relations vs analytical
 equations, impedance behaviour at resonance, frequency-domain vs time-domain
 consistency, displacement sign / scaling / zero handling, unit conversions,
 winding resistance (hand-computed example), enclosure volumes & Helmholtz

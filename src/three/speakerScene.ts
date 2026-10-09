@@ -37,6 +37,7 @@ export class SpeakerScene {
   private showRestRing = true;
   private running = true;
   private vizScale = 1;
+  private vizSmooth = 0;
   private frameTimes: number[] = [];
   fps = 0;
 
@@ -133,6 +134,7 @@ export class SpeakerScene {
   }
 
   setVizScale(s: number): void { this.vizScale = s; }
+  setSmoothing(a: number): void { this.vizSmooth = Math.max(0, Math.min(0.95, a)); }
   setShowRestRing(v: boolean): void { this.showRestRing = v; if (this.driver) this.driver.restRing.visible = v; }
   setRunning(v: boolean): void { this.running = v; }
 
@@ -187,7 +189,11 @@ export class SpeakerScene {
     this.raf = requestAnimationFrame(this.loop);
     if (!this.running) return;
     const t0 = performance.now();
-    const x = this.getDisp() * this.vizScale;
+    const xRaw = this.getDisp() * this.vizScale;
+    // display-only EMA smoothing (measured values elsewhere stay unfiltered)
+    const x = this.vizSmooth > 0
+      ? this.lastDisp + (xRaw - this.lastDisp) * (1 - this.vizSmooth)
+      : xRaw;
     this.lastDisp = x;
 
     if (this.driver) {

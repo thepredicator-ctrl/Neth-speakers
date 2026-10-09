@@ -26,8 +26,8 @@ export interface ConeParams {
 }
 
 export interface SurroundParams {
-  innerDiameter: number;   // mm — attaches to cone edge
-  outerDiameter: number;   // mm — attaches to frame seat
+  innerDiameter: number;   // mm — attaches to cone edge (auto-tracked to cone)
+  outerDiameter: number;   // mm — attaches to frame seat (auto: inner + 2×rollWidth)
   rollCount: number;       // 1 = half-roll, 2 = double roll
   rollHeight: number;      // mm — radial half-width of the roll arc
   rollWidth: number;       // mm — lateral (axial) width of surround
@@ -35,10 +35,11 @@ export interface SurroundParams {
   thickness: number;       // mm
   stiffness: number;       // N/m — effective axial stiffness contribution
   damping: number;         // N·s/m — mechanical resistance contribution
+  color: string;           // hex, 3D model
 }
 
 export interface SpiderParams {
-  innerDiameter: number;   // mm — bonded to voice-coil former
+  innerDiameter: number;   // mm — bonded to voice-coil former (auto-tracked)
   outerDiameter: number;   // mm — bonded to basket shelf
   corrugations: number;    // count
   corrDepth: number;       // mm — corrugation depth (sets long-throw capability)
@@ -46,6 +47,7 @@ export interface SpiderParams {
   thickness: number;       // mm
   stiffness: number;       // N/m — primary compliance source
   damping: number;         // N·s/m
+  color: string;           // hex, 3D model
 }
 
 export interface VoiceCoilParams {
@@ -82,6 +84,7 @@ export interface MagnetParams {
   leakageFactor: number;     // σ ≥ 1 — magnetic-circuit leakage (1 = ideal)
   bl: Overridable;           // T·m — null = magnetic-circuit estimate
   bGap: Overridable;         // T — null = estimate
+  painted: boolean;          // black-painted plates/pole in 3D model
 }
 
 export interface FrameParams {
@@ -91,6 +94,9 @@ export interface FrameParams {
   tinselLeads: number;    // count
   mountingHoles: number;
   materialId: string;
+  color: string;          // hex, 3D model
+  style: 'stamped' | 'diecast';  // basket visual style
+  gasket: boolean;        // show gasket ring
 }
 
 export interface DriverParams {
@@ -149,6 +155,8 @@ export interface EnclosureParams {
   wiring: 'parallel' | 'series';      // between drivers
   coilWiring: 'parallel' | 'series';  // for dual voice coils
   driverMount: 'flush' | 'surface';
+  finishColor: string;                 // cabinet finish (hex, 3D)
+  grille: { enabled: boolean; color: string };  // front grille visual
 }
 
 export interface AmplifierParams {
@@ -176,6 +184,10 @@ export interface SimSettings {
   speed: number;           // playback rate for slow motion
   running: boolean;
   paused: boolean;
+  /** Solver effort for the real-time model: Precision = 8 substeps, Balanced = 4, Fast = 2. */
+  quality: 'precision' | 'balanced' | 'fast';
+  /** Display-only exponential smoothing of rendered displacement (0 = none). */
+  vizSmoothing: number;
 }
 
 /** Completely computed Thiele–Small parameter set (SI units). */

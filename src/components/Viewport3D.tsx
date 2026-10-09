@@ -35,6 +35,7 @@ export function Viewport3D(props: {
   const enclosure = useApp((s) => s.enclosure);
   const materialById = useApp((s) => s.materialById);
   const audio = useApp((s) => s.audio);
+  const vizSmoothing = useApp((s) => s.sim.vizSmoothing);
   const matsRef = useRef(materialById);
   matsRef.current = materialById;
   const audioRef = useRef(audio);
@@ -59,6 +60,7 @@ export function Viewport3D(props: {
     sceneRef.current?.setWallOpacity(props.wallOpacity ?? 0.18);
   }, [props.showEnclosure, props.wallOpacity, enclosure, driver]);
   useEffect(() => { sceneRef.current?.setVizScale(props.vizScale ?? vizScaleOf(audioRef.current)); }, [props.vizScale, audio.vizMode, audio.vizMultiplier]);
+  useEffect(() => { sceneRef.current?.setSmoothing(vizSmoothing); }, [vizSmoothing]);
   useEffect(() => { if (props.viewRequest) sceneRef.current?.setView(props.viewRequest.v); }, [props.viewRequest]);
   useEffect(() => { sceneRef.current?.setExploded(props.exploded ?? 0); }, [props.exploded]);
   useEffect(() => { sceneRef.current?.setSection(props.section ?? null); }, [props.section]);

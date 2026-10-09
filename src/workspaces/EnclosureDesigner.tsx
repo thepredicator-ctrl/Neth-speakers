@@ -1,7 +1,7 @@
 /* Enclosure Designer — sealed / ported / passive-radiator design with cutaway 3D. */
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../store';
-import { Section, Btn, Param, Sel, Badge, Readout } from '../components/ui';
+import { Section, Btn, Param, Sel, Badge, Readout, Toggle } from '../components/ui';
 import { Plot } from '../components/Plot';
 import { Viewport3D } from '../components/Viewport3D';
 import { Viewport3D as _V } from '../components/Viewport3D';
@@ -97,6 +97,15 @@ export function EnclosureDesigner() {
               onChange={(v) => patchEnclosure({ damping: v as typeof enc.damping })}
               hint="Fill makes the box behave acoustically larger (isothermal effect)"
             />
+            <div className="param"><label>Finish color</label>
+              <input type="color" value={enc.finishColor} onChange={(e) => patchEnclosure({ finishColor: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
+            </div>
+            <Toggle label="Front grille" value={enc.grille.enabled} onChange={(v) => patchEnclosure({ grille: { ...enc.grille, enabled: v } })} hint="Visual only — see-through mesh disc + frame ring" />
+            {enc.grille.enabled ? (
+              <div className="param"><label>Grille color</label>
+                <input type="color" value={enc.grille.color} onChange={(e) => patchEnclosure({ grille: { ...enc.grille, color: e.target.value } })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
+              </div>
+            ) : null}
           </Section>
 
           {enc.type === 'ported' ? (

@@ -1,7 +1,7 @@
 /* Parts Editor — cone, surround, spider, voice coil, magnet, frame detail editing. */
 import React, { useState } from 'react';
 import { useApp } from '../store';
-import { Section, Btn, Param, Sel, Badge, Readout } from '../components/ui';
+import { Section, Btn, Param, Sel, Badge, Readout, Toggle } from '../components/ui';
 import { Viewport3D } from '../components/Viewport3D';
 import { MATERIALS } from '../physics/materials';
 import { fmtSI, mm2m, g2kg } from '../physics/units';
@@ -88,6 +88,9 @@ export function PartsEditor() {
               <Param label="Thickness" value={driver.surround.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.surround({ thickness: v })} />
               <Param label="Axial stiffness" value={driver.surround.stiffness} min={20} max={4000} step={5} digits={0} unit="N/m" badge="user" onChange={(v) => patch.surround({ stiffness: v })} />
               <Param label="Damping" value={driver.surround.damping} min={0} max={5} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.surround({ damping: v })} />
+              <div className="param"><label>Color</label>
+                <input type="color" value={driver.surround.color} onChange={(e) => patch.surround({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
+              </div>
               <p className="note">Kms = K_spider + K_surround = {fmtSI(ts.Kms, 'N/m', 2)}. The roll visibly flattens/unrolls with excursion in 3D.</p>
             </Section>
           ) : null}
@@ -102,6 +105,10 @@ export function PartsEditor() {
               <Param label="Thickness" value={driver.spider.thickness} min={0.05} max={2} step={0.01} digits={2} unit="mm" onChange={(v) => patch.spider({ thickness: v })} />
               <Param label="Stiffness" value={driver.spider.stiffness} min={50} max={8000} step={10} digits={0} unit="N/m" badge="user" onChange={(v) => patch.spider({ stiffness: v })} />
               <Param label="Damping" value={driver.spider.damping} min={0} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.spider({ damping: v })} />
+              <div className="param"><label>Color</label>
+                <input type="color" value={driver.spider.color} onChange={(e) => patch.spider({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
+              </div>
+              <p className="note">Inner Ø auto-tracks the former outer wall, outer Ø is limited by the top plate — the spider always bonds correctly.</p>
             </Section>
           ) : null}
 
@@ -155,6 +162,7 @@ export function PartsEditor() {
               <Param label="Back plate thickness" value={driver.magnet.backPlateThickness} min={3} max={60} unit="mm" onChange={(v) => patch.magnet({ backPlateThickness: v })} />
               <Param label="Gap width (radial)" value={driver.magnet.gapWidth} min={0.2} max={8} step={0.05} digits={2} unit="mm" onChange={(v) => patch.magnet({ gapWidth: v })} />
               <Param label="Leakage factor σ" value={driver.magnet.leakageFactor} min={1} max={4} step={0.05} digits={2} onChange={(v) => patch.magnet({ leakageFactor: v })} hint="1 = ideal; real ferrite structures 1.8–2.8" />
+              <Toggle label="Painted plates & pole" value={driver.magnet.painted} onChange={(v) => patch.magnet({ painted: v })} hint="Black painted steel in the 3D model (visual only)" />
               <div className="row" style={{ marginTop: 6 }}>
                 <Badge kind={driver.magnet.bGap != null ? 'user' : 'est'}>B gap {ts.Bgap.toFixed(2)} T</Badge>
                 <Badge kind={driver.magnet.bl != null ? 'user' : 'est'}>Bl {ts.Bl.toFixed(2)} T·m</Badge>
@@ -176,12 +184,17 @@ export function PartsEditor() {
 
           {part === 'frame' ? (
             <Section title="Frame & Chassis">
-              <Param label="Frame depth" value={driver.frame.depth} min={30} max={300} unit="mm" onChange={(v) => patch.frame({ depth: v })} />
+              <Param label="Frame depth" value={driver.frame.depth} min={30} max={300} unit="mm" hint="Auto-grows to house the motor stack if the design needs it" onChange={(v) => patch.frame({ depth: v })} />
               <Param label="Gasket thickness" value={driver.frame.gasketThickness} min={0.5} max={6} step={0.1} digits={1} unit="mm" onChange={(v) => patch.frame({ gasketThickness: v })} />
               <Sel label="Terminals" value={driver.frame.terminals} options={[{ value: 'push', label: 'Push tabs' }, { value: 'solder', label: 'Solder lugs' }, { value: 'spring', label: 'Spring clips' }]} onChange={(v) => patch.frame({ terminals: v as typeof driver.frame.terminals })} />
               <Param label="Tinsel leads" value={driver.frame.tinselLeads} min={2} max={4} step={1} digits={0} onChange={(v) => patch.frame({ tinselLeads: Math.round(v) })} />
               <Param label="Mounting holes" value={driver.frame.mountingHoles} min={4} max={8} step={1} digits={0} onChange={(v) => patch.frame({ mountingHoles: Math.round(v) })} />
               <Sel label="Frame material" value={driver.frame.materialId} options={matOpts(['frame', 'custom'])} onChange={(v) => patch.frame({ materialId: v })} />
+              <Sel label="Basket style" value={driver.frame.style} options={[{ value: 'stamped', label: 'Stamped steel' }, { value: 'diecast', label: 'Die-cast' }]} onChange={(v) => patch.frame({ style: v as typeof driver.frame.style })} />
+              <Toggle label="Front gasket ring" value={driver.frame.gasket} onChange={(v) => patch.frame({ gasket: v })} />
+              <div className="param"><label>Frame color</label>
+                <input type="color" value={driver.frame.color} onChange={(e) => patch.frame({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
+              </div>
             </Section>
           ) : null}
 

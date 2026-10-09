@@ -16,6 +16,9 @@ import { computeAmp, type AmpResult } from './physics/amplifier';
 import { MATERIALS } from './physics/materials';
 import { engine, type EngineSnapshot } from './audio/engine';
 import { mm2m, L2m3 } from './physics/units';
+import {
+  sanitizeDriver, sanitizeEnclosure, sanitizeAmplifier, sanitizeAudio, sanitizeSim,
+} from './physics/validate';
 import type { ProjectRecord } from './storage/project';
 import * as db from './storage/db';
 
@@ -93,12 +96,31 @@ function computeDerived(d: DriverParams, e: EnclosureParams, a: AmplifierParams,
     sourceImpedance: a.outputImpedance,
     sampleRate: 48000,
   });
-  const amp = computeAmp(a, ts, wi);
-  return { ts, winding, magnet, sys, amp, encLitres, driverDisplacementL: driverVolL };
+    const amp = computeAmp(a, ts, wi);
+    return { ts, winding, magnet, sys, amp, encLitres, driverDisplacementL: driverVolL };
 }
 
-const materialFinder = (custom: MaterialDef[]) => (id: string): MaterialDef | undefined =>
-  MATERIALS.find((m) => m.id === id) ?? custom.find((m) => m.id === id);
+/** Substeps for the real-time solver by simulation quality. */
+export const QUALITY_SUBSTEPS: Record<SimSettings['quality'], number> = {
+  precision: 8, balanced: 4, fast: 2,
+};
+
+  const materialFinder = (custom: MaterialDef[]) => (id: string): MaterialDef | undefined =>
+    MATERIALS.find((m) => m.id === id) ?? custom.find((m) => m.id === id);
+
+/** Deep-merge a partial (possibly old-version) record over the defaults so
+ *  projects saved by earlier builds always load complete. */
+function withDefaults<T>(base: T, patch: unknown): T {
+  if (patch == null || typeof patch !== 'object') return base;
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
+    const b = (base as Record<string, unknown>)[k];
+    out[k] = v !== null && typeof v === 'object' && !Array.isArray(v) && b !== null && typeof b === 'object' && !Array.isArray(b)
+      ? withDefaults(b, v)
+      : v;
+  }
+  return out as T;
+}
 
 export const useApp = create<AppState>((set, get) => {
   const pushDerived = () => {
@@ -122,7 +144,7 @@ export const useApp = create<AppState>((set, get) => {
         blDrop: driver.blDropAtXmech * (derived.ts.Xmech / Math.max(derived.ts.Xmax, 0.1)) ** 2,
         kmsRise: driver.kmsRiseAtXmax,
         xmax: mm2m(derived.ts.Xmax),
-        substeps: 4,
+        substeps: QUALITY_SUBSTEPS[sim.quality] ?? 4,
       });
     } else {
       engine.setNonlinear(null);
@@ -130,8 +152,8 @@ export const useApp = create<AppState>((set, get) => {
   };
 
   return {
-    driver: defaultDriver(),
-    enclosure: defaultEnclosure(),
+    driver: sanitizeDriver(defaultDriver()),
+    enclosure: sanitizeEnclosure(defaultEnclosure(), sanitizeDriver(defaultDriver())),
     amplifier: defaultAmplifier(),
     audio: defaultAudio(),
     sim: defaultSim(),
@@ -145,40 +167,44 @@ export const useApp = create<AppState>((set, get) => {
 
     setWorkspace: (w) => set({ workspace: w }),
 
-    patchDriver: (patch) => { set({ driver: { ...get().driver, ...patch } }); pushDerived(); },
+    // Every patch is sanitized + self-balanced: values can bend the design
+    // but can never break the model.
+    patchDriver: (patch) => { set({ driver: sanitizeDriver({ ...get().driver, ...patch }) }); pushDerived(); },
     patchCone: (patch) => {
-      const d = get().driver;
-      const cone = { ...d.cone, ...patch };
-      // keep angle & depth consistent (depth wins; angle derived for display)
-      cone.angleDeg = Math.atan((cone.outerDiameter / 2 - cone.dustCapDiameter / 2 - 6) / Math.max(1, cone.depth)) * (180 / Math.PI);
-      set({ driver: { ...d, cone } });
+      const d = sanitizeDriver({ ...get().driver, cone: { ...get().driver.cone, ...patch } });
+      set({ driver: d });
       pushDerived();
     },
-    patchSurround: (patch) => { const d = get().driver; set({ driver: { ...d, surround: { ...d.surround, ...patch } } }); pushDerived(); },
-    patchSpider: (patch) => { const d = get().driver; set({ driver: { ...d, spider: { ...d.spider, ...patch } } }); pushDerived(); },
-    patchCoil: (patch) => { const d = get().driver; set({ driver: { ...d, coil: { ...d.coil, ...patch } } }); pushDerived(); },
-    patchMagnet: (patch) => { const d = get().driver; set({ driver: { ...d, magnet: { ...d.magnet, ...patch } } }); pushDerived(); },
-    patchFrame: (patch) => { const d = get().driver; set({ driver: { ...d, frame: { ...d.frame, ...patch } } }); pushDerived(); },
+    patchSurround: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, surround: { ...d.surround, ...patch } }) }); pushDerived(); },
+    patchSpider: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, spider: { ...d.spider, ...patch } }) }); pushDerived(); },
+    patchCoil: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, coil: { ...d.coil, ...patch } }) }); pushDerived(); },
+    patchMagnet: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, magnet: { ...d.magnet, ...patch } }) }); pushDerived(); },
+    patchFrame: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, frame: { ...d.frame, ...patch } }) }); pushDerived(); },
 
-    patchEnclosure: (patch) => { set({ enclosure: { ...get().enclosure, ...patch } }); pushDerived(); },
-    patchPort: (patch) => { const e = get().enclosure; set({ enclosure: { ...e, port: { ...e.port, ...patch } } }); pushDerived(); },
-    patchPassive: (patch) => { const e = get().enclosure; set({ enclosure: { ...e, passive: { ...e.passive, ...patch } } }); pushDerived(); },
+    patchEnclosure: (patch) => { set({ enclosure: sanitizeEnclosure({ ...get().enclosure, ...patch }, get().driver) }); pushDerived(); },
+    patchPort: (patch) => { const e = get().enclosure; set({ enclosure: sanitizeEnclosure({ ...e, port: { ...e.port, ...patch } }, get().driver) }); pushDerived(); },
+    patchPassive: (patch) => { const e = get().enclosure; set({ enclosure: sanitizeEnclosure({ ...e, passive: { ...e.passive, ...patch } }, get().driver) }); pushDerived(); },
 
-    patchAmplifier: (patch) => { set({ amplifier: { ...get().amplifier, ...patch } }); pushDerived(); },
+    patchAmplifier: (patch) => { set({ amplifier: sanitizeAmplifier({ ...get().amplifier, ...patch }) }); pushDerived(); },
     patchAudio: (patch) => {
-      const audio = { ...get().audio, ...patch };
+      const audio = sanitizeAudio({ ...get().audio, ...patch });
       set({ audio });
       engine.setSettings(audio);
       engine.setAcoustic(audio.acousticOutput);
     },
-    patchSim: (patch) => { set({ sim: { ...get().sim, ...patch } }); },
+    patchSim: (patch) => {
+      const sim = sanitizeSim({ ...get().sim, ...patch });
+      set({ sim });
+      if (patch.mode !== undefined || patch.quality !== undefined) pushDerived();
+    },
 
     applyPresetId: (id) => {
       const { driver, enclosure } = applyPreset(id);
       const preset = PRESETS.find((p) => p.id === id);
+      const driverS = sanitizeDriver(driver);
       set({
-        driver,
-        enclosure: { ...get().enclosure, ...enclosure },
+        driver: driverS,
+        enclosure: sanitizeEnclosure({ ...get().enclosure, ...enclosure }, driverS),
         projectName: preset ? preset.name : get().projectName,
         currentProjectId: null,
       });
@@ -186,14 +212,17 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     loadProjectRecord: (rec) => {
+      // Merge over defaults first: projects saved by older builds (or edited
+      // JSON) can lack newer fields — every value then gets a safe default.
+      const driver = sanitizeDriver(withDefaults(defaultDriver(), rec.driver));
       set({
-        driver: rec.driver,
-        enclosure: rec.enclosure,
-        amplifier: rec.amplifier,
-        audio: rec.audio,
-        sim: rec.sim,
-        projectName: rec.name,
-        currentProjectId: rec.id,
+        driver,
+        enclosure: sanitizeEnclosure(withDefaults(defaultEnclosure(), rec.enclosure), driver),
+        amplifier: sanitizeAmplifier(withDefaults(defaultAmplifier(), rec.amplifier)),
+        audio: sanitizeAudio(withDefaults(defaultAudio(), rec.audio)),
+        sim: sanitizeSim(withDefaults(defaultSim(), rec.sim)),
+        projectName: typeof rec.name === 'string' ? rec.name.slice(0, 120) : 'Untitled Design',
+        currentProjectId: typeof rec.id === 'string' ? rec.id : null,
       });
       pushDerived();
     },

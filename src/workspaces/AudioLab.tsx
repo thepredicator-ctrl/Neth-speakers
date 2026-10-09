@@ -27,6 +27,7 @@ export function AudioLab() {
   const [pos, setPos] = useState(0);
   const [loop, setLoop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [eng, setEng] = useState(engine.status());
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [hist, setHist] = useState<[number, number][]>([]);
   const waveRef = useRef<HTMLCanvasElement>(null);
@@ -70,6 +71,10 @@ export function AudioLab() {
       if (engine.currentTrack) {
         setPos((old) => (Math.abs(old - p) > 0.05 ? p : old));
       }
+      setEng((old) => {
+        const s = engine.status();
+        return old.ctxState === s.ctxState && old.worklet === s.worklet && old.fallback === s.fallback ? old : s;
+      });
       drawSpectrum();
       if (t - histLast > 100) {
         histLast = t;
@@ -175,6 +180,20 @@ export function AudioLab() {
       <div className="split">
         <div className="side">
           <Section title="Audio Source">
+            <div className="row" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <Badge kind={eng.ctxState === 'running' ? 'ok' : eng.ctxState === 'suspended' ? 'warn' : 'est'}>
+                AUDIO {eng.ctxState === 'running' ? 'RUNNING' : eng.ctxState === 'suspended' ? 'SUSPENDED' : 'OFF'}
+              </Badge>
+              <Badge kind={eng.fallback ? 'warn' : eng.worklet ? 'ok' : 'est'}>
+                {eng.fallback ? 'COMPAT MODE' : eng.worklet ? 'WORKLET DSP' : '—'}
+              </Badge>
+              {eng.sampleRate > 0 ? <Badge kind="est">{Math.round(eng.sampleRate / 1000)} kHz</Badge> : null}
+              {eng.ctxState === 'suspended' ? (
+                <Btn small variant="primary" onClick={async () => { await engine.resumeSafely(); setEng(engine.status()); }}>
+                  Enable audio
+                </Btn>
+              ) : null}
+            </div>
             {!track ? (
               <FileDrop onFile={loadFile} accept="audio/*" label="Drop MP3/WAV/OGG/FLAC here — or click to browse. Files stay on your device." />
             ) : (
