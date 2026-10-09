@@ -50,9 +50,13 @@ export class SyncClock {
   /**
    * Render-time displacement: extrapolate from the newest worklet message
    * using velocity — keeps the cone smooth between message arrivals and
-   * inherently locked to the audio clock (same timebase).
+   * inherently locked to the audio clock (same timebase). The horizon is
+   * ~2 worklet message periods (~10.7 ms apart): long enough to bridge
+   * jitter, short enough that velocity extrapolation cannot visibly
+   * overshoot the true trajectory at low frequencies. The engine further
+   * clamps the result to the mechanical envelope.
    */
-  renderDisplacement(ctxTime: number, dtMax = 0.05): number {
+  renderDisplacement(ctxTime: number, dtMax = 0.022): number {
     if (!this.sample) return 0;
     const dt = Math.min(Math.max(ctxTime - this.sample.t, 0), dtMax);
     return this.sample.x + this.sample.v * dt;

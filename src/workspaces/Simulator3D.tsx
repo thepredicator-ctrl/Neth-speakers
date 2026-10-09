@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
 import { Viewport3D, physicalDispMm, type ViewName } from '../components/Viewport3D';
 import { Section, Btn, Param, Sel, Badge, XBar } from '../components/ui';
+import { useExcursionStats } from '../components/useExcursionStats';
 import { engine } from '../audio/engine';
 
 export function Simulator3D() {
@@ -18,6 +19,7 @@ export function Simulator3D() {
   const [section, setSection] = useState<number | null>(null);
   const [quality, setQuality] = useState<'low' | 'med' | 'high'>('med');
   const [live, setLive] = useState({ mm: 0, limit: false, fps: 0 });
+  const { stats: exc, reset: resetExc } = useExcursionStats();
   const rafRef = useRef(0);
 
   // HUD refresh at ~30fps (React state), while the 3D itself runs at 60fps
@@ -82,6 +84,21 @@ export function Simulator3D() {
             />
             <Param label="Display smoothing" value={sim.vizSmoothing} min={0} max={0.9} step={0.05} digits={2} unit="" onChange={(v) => patchSim({ vizSmoothing: v })} hint="Smooths the RENDERED motion only — measured values stay unfiltered" />
             <p className="note">The linear model is solved by exact ZOH discretization at the hardware sample rate — stable for any parameter combination. Quality only affects nonlinear substep depth.</p>
+          </Section>
+
+          <Section title="Excursion Statistics (from the model)">
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <Badge kind="est">PEAK (session) {exc.peak.toFixed(2)} mm</Badge>
+              <Badge kind="est">TRAVEL p-p {exc.p2p.toFixed(2)} mm</Badge>
+              <Badge kind={exc.max >= 0 ? 'ok' : 'est'}>max +{exc.max.toFixed(2)}</Badge>
+              <Badge kind={exc.min <= 0 ? 'ok' : 'est'}>min {exc.min.toFixed(2)} mm</Badge>
+              <Btn small ghost onClick={resetExc}>Reset stats</Btn>
+            </div>
+            <p className="note">
+              Xmax {ts.Xmax.toFixed(1)} mm and Xmax p-p {ts.XmaxPP.toFixed(1)} mm are the LINEAR limits
+              (one-way / peak-to-peak); Vd = Sd·Xmax = {(ts.Vd * 1e6).toFixed(0)} cm³. Peak and travel above are
+              measured from the simulated displacement itself — never from an animation value.
+            </p>
           </Section>
 
           <Section title="Test Signal">

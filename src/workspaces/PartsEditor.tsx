@@ -53,7 +53,7 @@ export function PartsEditor() {
           {part === 'cone' ? (
             <Section title="Cone Diaphragm">
               <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={600} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
-              <Param label="Effective radiating Ø" value={driver.cone.effectiveDiameter} min={15} max={560} unit="mm" badge="user" onChange={(v) => patch.cone({ effectiveDiameter: v })} hint="Drives Sd — usually ≈ surround inner Ø + a little roll" />
+              <div className="note mono" style={{ margin: '2px 0 6px' }}>Effective radiating Ø (auto): {driver.cone.effectiveDiameter.toFixed(1)} mm = cone {driver.cone.outerDiameter.toFixed(1)} + ½×{driver.surround.rollWidth.toFixed(1)} roll — drives Sd</div>
               <Param label="Depth" value={driver.cone.depth} min={2} max={120} unit="mm" onChange={(v) => patch.cone({ depth: v })} />
               <Param label="Side angle (derived)" value={driver.cone.angleDeg} min={5} max={89} unit="°" badge="est" onChange={(v) => patch.cone({ depth: Math.max(2, (driver.cone.outerDiameter / 2 - 25) / Math.tan((v * Math.PI) / 180)) })} />
               <Param label="Thickness" value={driver.cone.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.cone({ thickness: v })} />

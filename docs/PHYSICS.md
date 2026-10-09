@@ -205,3 +205,47 @@ Output rows: displacement, velocity, current, and far-field pressure
   verified per commercial grade.
 - Impedance above ~2 kHz is dominated by `Le` modeled as a constant (no
   semi-inductance lossy models).
+
+---
+
+## 19. Driver assembly layout — single source of truth
+
+All component positions and radii are computed in `src/physics/layout.ts`
+(`computeLayout`). The 3D geometry, the excursion limits and every displayed
+statistic consume that one module — nothing else derives its own geometry.
+
+### Attachment map (who bonds to whom)
+
+| Component | Bonded to | Geometric rule |
+|---|---|---|
+| Cone outer edge | Surround inner edge | same radius, shared seat plane y = 0 |
+| Surround outer edge | Frame flange seat | flat landing tab at y = +1.4 mm |
+| Cone inner edge | Voice-coil former top | same radius, glue lip, former flush at y = −depth + 0.5 mm |
+| Winding | Former outside | layer k at radius formerOD + wire·(k+½), straddles the gap |
+| Spider inner edge | Former outer wall | identical radius, rides with x |
+| Spider outer edge | Basket shelf | shelf top face exactly at the spider rest plane |
+| Former bottom | — (open tube) | slides over the pole (ID ≥ pole OD + 0.6 mm), stops above the back plate |
+
+### Excursion conventions
+
+- **Xmax** — one-way *linear* excursion: overhung `(h_wind − h_gap)/2`,
+  underhung `(h_gap − h_wind)/2`.
+- **Xmax p-p** = 2·Xmax (peak-to-peak travel). Never mixed with Xmax.
+- **Xmech** — one-way *mechanical* limit, now GEOMETRIC (was 2.5·Xmax):
+  `min(spider→top-plate clearance, former-bottom→back-plate clearance,
+  surround roll capability)`.
+- **Surround roll capability** ≈ 1.25 × rollHeight (documented approximation).
+- **Vd** — displacement volume, ONE-WAY convention: `Vd = Sd × Xmax`.
+- **Sd** — piston extends to half the surround roll:
+  `Deff = cone outer diameter + rollWidth` (auto-derived, not editable).
+
+### Auto-balance chain (sanitizer, layout-driven)
+
+Changing any parameter re-derives, in order: former ID ≥ pole OD + 0.6 mm
+(sliding fit) → winding ≥ former OD + wire → gap ≥ winding stack + 0.35 mm →
+spider inner ≡ former outer (bond) → surround inner ≡ cone outer → effective
+Ø ≡ cone + rollWidth → roll height ≥ Xmax / 1.25 → former height ≥ bond +
+glue + winding + 2 mm → magnet stack ≥ former-bottom clearance for the
+excursion target (deep stacks for long throw, as in real motors). The spider
+bond height is sized so the spider plane still clears the top plate after a
+full down-stroke. Xmax ≤ Xmech is enforced last.

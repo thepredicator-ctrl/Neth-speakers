@@ -18,6 +18,7 @@ import type {
   DriverParams, EnclosureParams, AmplifierParams, AudioSettings, SimSettings,
   ConeParams, SurroundParams, SpiderParams, VoiceCoilParams, MagnetParams, FrameParams,
 } from './types';
+import { computeLayout, minFormerHeightM, SURROUND_TRAVEL_FACTOR } from './layout';
 
 /* ------------------------------------------------------------------ */
 /* primitive helpers                                                   */
@@ -64,8 +65,9 @@ export function sanitizeCone(c: ConeParams): ConeParams {
   return {
     ...c,
     outerDiameter: outer,
-    // effective piston can not exceed the cone body, and must be a piston at all
-    effectiveDiameter: clamp(num(c.effectiveDiameter, outer * 0.4, outer, 167), 12, 760),
+    // effective radiating diameter is AUTO-TRACKED in sanitizeDriver
+    // (cone body + half the surround roll); this clamp is a defensive bound.
+    effectiveDiameter: clamp(num(c.effectiveDiameter, outer * 0.4, outer * 1.5, outer), 12, 760),
     depth: num(c.depth, 2, 150, 34),
     angleDeg: num(c.angleDeg, 5, 89, 65),
     thickness: num(c.thickness, 0.05, 10, 0.9),
@@ -96,11 +98,9 @@ export function sanitizeSurround(s: SurroundParams, coneOuter?: number): Surroun
 }
 
 export function sanitizeSpider(sp: SpiderParams, coilFormerOuterMM?: number, topPlateDiamMM?: number): SpiderParams {
-  // AUTO-BALANCE: the spider inner edge can never sit inside the former —
-  // clamp up to the former outer wall when the user value is smaller.
-  const inner = coilFormerOuterMM != null
-    ? Math.max(num(sp.innerDiameter, 8, 400, 42), coilFormerOuterMM)
-    : num(sp.innerDiameter, 8, 400, 42);
+  // AUTO-BALANCE: the spider inner edge is BONDED to the former outer wall —
+  // the diameters are identical, so the bond can never float or overlap.
+  const inner = coilFormerOuterMM != null ? coilFormerOuterMM : num(sp.innerDiameter, 8, 400, 42);
   let outer = num(sp.outerDiameter, inner + 10, 700, Math.max(inner + 40, 120));
   if (topPlateDiamMM != null) outer = clamp(outer, inner + 10, Math.max(inner + 10, topPlateDiamMM + 12));
   return {
@@ -116,10 +116,13 @@ export function sanitizeSpider(sp: SpiderParams, coilFormerOuterMM?: number, top
   };
 }
 
-export function sanitizeCoil(c: VoiceCoilParams): VoiceCoilParams {
+export function sanitizeCoil(c: VoiceCoilParams, poleDiameterMM?: number): VoiceCoilParams {
   const wireD = num(c.wireDiameter, 0.05, 3, 0.45);
   const fT = num(c.formerThickness, 0.05, 5, 0.25);
-  const formerD = num(c.formerDiameter, 5, 300, 49.4);
+  // AUTO-BALANCE: the former is a tube sliding over the centre pole — its ID
+  // always clears the pole OD by a 0.3 mm radial sliding gap per side.
+  const minFormerID = poleDiameterMM != null ? poleDiameterMM + 0.6 : 5;
+  const formerD = Math.max(num(c.formerDiameter, 5, 300, 49.4), minFormerID);
   const layers = int(c.layers, 1, 4, 4);
   // AUTO-BALANCE: the first winding layer sits ON the former — winding
   // diameter can never be smaller than former OD + 2×thickness + wire.
@@ -212,20 +215,73 @@ export function minFrameDepthMM(d: DriverParams): number {
 export function sanitizeDriver(d: DriverParams): DriverParams {
   const cone = sanitizeCone(d.cone);
   const surround = sanitizeSurround(d.surround, cone.outerDiameter);
-  const coil = sanitizeCoil(d.coil);
+  // sanitize the pole value first: the former ID depends on it (sliding fit)
+  const poleSafe = num(d.magnet.poleDiameter, 4, 260, 50);
+  let coil = sanitizeCoil(d.coil, poleSafe);
   // outer radius of the complete winding stack (mm)
   const coilOuterMM =
     coil.windingDiameter / 2 + (coil.layers - 1) * coil.wireDiameter + coil.wireDiameter / 2;
-  const magnet = sanitizeMagnet(d.magnet, coilOuterMM);
+  let magnet = sanitizeMagnet(d.magnet, coilOuterMM);
   const spider = sanitizeSpider(d.spider, coil.formerDiameter + 2 * coil.formerThickness, magnet.topPlateDiameter);
-  const frame = sanitizeFrame(d.frame, minFrameDepthMM({ ...d, cone, surround, coil, magnet, spider }));
+
+  // AUTO-BALANCE: the effective radiating diameter is DERIVED from the drawn
+  // geometry — cone body + half the surround roll (piston extends to the
+  // middle of the surround). Sd can never contradict the 3D model.
+  cone.effectiveDiameter = clamp(
+    cone.outerDiameter + surround.rollWidth,
+    cone.outerDiameter * 0.5,
+    cone.outerDiameter * 1.5,
+  );
+
+  // AUTO-BALANCE: the surround roll must be able to travel the full linear
+  // excursion (capability ≈ 1.25 × rollHeight, see layout.ts). The user's
+  // Xmax override counts as much as the coil-in-gap estimate.
+  const windHMM = (coil.windingHeight != null ? coil.windingHeight
+    : coil.turnsPerLayer * coil.wireDiameter * 1.08);
+  const xmaxCalcMM = coil.config === 'overhung'
+    ? Math.max(0, (windHMM - magnet.topPlateThickness) / 2)
+    : Math.max(0, (magnet.topPlateThickness - windHMM) / 2);
+  const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 60) ?? 0) : 0;
+  const xmaxTargetMM = Math.max(xmaxCalcMM, xmaxOvrMM);
+  if (xmaxTargetMM > 0) {
+    surround.rollHeight = Math.max(surround.rollHeight, xmaxTargetMM / SURROUND_TRAVEL_FACTOR);
+  }
+
+  // AUTO-BALANCE: converge the assembly — the former must house the bond and
+  // winding, and the magnet stack must be deep enough that the former bottom
+  // never reaches the back plate within the excursion target (what real
+  // long-throw motors do). Both converge in one pass; loop for safety.
+  let pre: DriverParams = { ...d, cone, surround, coil, magnet, spider };
+  for (let i = 0; i < 3; i++) {
+    const L = computeLayout(pre);
+    let changed = false;
+    const minFH = L.requiredFormerH * 1e3;
+    if (coil.formerHeight < minFH - 1e-9) {
+      coil = { ...coil, formerHeight: Math.min(300, minFH) };
+      changed = true;
+    }
+    const needStack = L.requiredMagStack * 1e3;
+    const curStack = magnet.thickness * Math.max(1, Math.round(magnet.count));
+    if (curStack < needStack - 1e-9) {
+      let count = Math.max(1, Math.round(magnet.count));
+      let total = needStack;
+      let thk: number;
+      if (total / count <= 80) {
+        thk = total / count;
+      } else {
+        count = Math.min(6, Math.ceil(total / 80));
+        thk = Math.min(80, total / count);
+      }
+      magnet = { ...magnet, thickness: num(thk, 2, 80, magnet.thickness), count: int(count, 1, 6, magnet.count) };
+      changed = true;
+    }
+    pre = { ...d, cone, surround, coil, magnet, spider };
+    if (!changed) break;
+  }
+
+  const frame = sanitizeFrame(d.frame, minFrameDepthMM(pre));
   const out: DriverParams = {
-    ...d,
-    cone,
-    surround,
-    spider,
-    coil,
-    magnet,
+    ...pre,
     frame,
     blDropAtXmech: num(d.blDropAtXmech, 0, 0.9, 0.25),
     kmsRiseAtXmax: num(d.kmsRiseAtXmax, 0, 3, 0.6),
@@ -240,6 +296,8 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
   if (out.xmaxOverride != null && out.xmechOverride != null) {
     out.xmaxOverride = Math.min(out.xmaxOverride, out.xmechOverride);
   }
+  // final layout sanity (defensive): recompute with the balanced set
+  computeLayout(out);
   return out;
 }
 

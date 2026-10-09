@@ -209,6 +209,13 @@ export interface TSParams {
   Vas: number;     // L equivalent compliance volume
   Xmax: number;    // mm one-way linear excursion
   Xmech: number;   // mm one-way mechanical limit
+  XmaxPP: number;  // mm peak-to-peak linear travel == 2·Xmax
+  Vd: number;      // m³ displacement volume == Sd × Xmax (ONE-WAY convention)
+  windH: number;   // mm winding height
+  gapH: number;    // mm magnetic gap height
+  coilOverhang: number; // mm (windH − gapH)/2 — negative = underhung
+  maxExcDown: number;   // mm geometric excursion capability downward
+  maxExcUp: number;     // mm geometric excursion capability upward
   eta0: number;    // reference efficiency (0..1)
   sens: number;    // dB SPL @ 2.83V/1m (half-space piston estimate)
   wireLength: number;  // m total wire length

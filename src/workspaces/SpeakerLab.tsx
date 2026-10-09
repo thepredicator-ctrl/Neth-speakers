@@ -57,8 +57,7 @@ export function SpeakerLab() {
           </Section>
 
           <Section title="Quick Dimensions">
-            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={600} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v, effectiveDiameter: Math.max(20, v - 2 * driver.surround.rollWidth) })} />
-            <Param label="Effective Ø (Sd)" value={driver.cone.effectiveDiameter} min={15} max={560} unit="mm" digits={1} badge="user" onChange={(v) => patchCone({ effectiveDiameter: v })} />
+            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={600} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
             <Param label="Cone depth" value={driver.cone.depth} min={2} max={120} unit="mm" digits={1} onChange={(v) => patchCone({ depth: v })} />
             <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={200} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
             <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={30} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />
@@ -94,11 +93,17 @@ export function SpeakerLab() {
               <Readout k="Bl" v={ts.Bl.toFixed(2)} unit="T·m" badge={driver.magnet.bl != null ? <Badge kind="user">USER</Badge> : <Badge kind="est">EST</Badge>} />
               <Readout k="B in gap" v={ts.Bgap.toFixed(2)} unit="T" badge={<Badge kind="est">EST</Badge>} />
               <Readout k="Sd" v={(ts.Sd * 1e4).toFixed(1)} unit="cm²" />
+              <Readout k="Effective Ø" v={`${(ts.Sd > 0 ? 2 * Math.sqrt(ts.Sd / Math.PI) * 1e3 : 0).toFixed(1)}`} unit="mm (auto)" />
+              <Readout k="Vd = Sd·Xmax" v={(ts.Vd * 1e6).toFixed(0)} unit="cm³ one-way" acc />
+              <Readout k="Xmax" v={ts.Xmax.toFixed(1)} unit="mm one-way" acc />
+              <Readout k="Xmax p-p" v={ts.XmaxPP.toFixed(1)} unit="mm peak-to-peak" />
+              <Readout k="Xmech" v={ts.Xmech.toFixed(1)} unit="mm one-way" />
+              <Readout k="Excursion envelope" v={`−${ts.maxExcDown.toFixed(1)} / +${ts.maxExcUp.toFixed(1)}`} unit="mm (geometry)" />
+              <Readout k="Winding / gap" v={`${ts.windH.toFixed(1)} / ${ts.gapH.toFixed(1)}`} unit="mm height" />
+              <Readout k="Coil overhang" v={ts.coilOverhang.toFixed(2)} unit={`mm (${driver.coil.config})`} />
               <Readout k="Mms" v={(ts.Mms * 1000).toFixed(1)} unit="g" badge={driver.cone.mass != null || driver.coil.mass != null ? <Badge kind="user">USER</Badge> : <Badge kind="est">EST</Badge>} />
               <Readout k="Cms" v={(ts.Cms * 1000).toFixed(3)} unit="mm/N" />
               <Readout k="Rms" v={ts.Rms.toFixed(2)} unit="N·s/m" />
-              <Readout k="Xmax" v={ts.Xmax.toFixed(1)} unit="mm one-way" acc />
-              <Readout k="Xmech" v={ts.Xmech.toFixed(1)} unit="mm one-way" />
               <Readout k="η₀" v={(ts.eta0 * 100).toFixed(2)} unit="%" badge={<Badge kind="est">EST</Badge>} />
               <Readout k="Sensitivity" v={ts.sens.toFixed(1)} unit="dB@1W/1m" acc />
               <Readout k="Power handling" v={driver.powerHandlingW.toFixed(0)} unit="W continuous" />

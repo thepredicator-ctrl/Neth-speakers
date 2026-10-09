@@ -4,6 +4,7 @@ import { useApp } from '../store';
 import { engine, type DecodedTrack } from '../audio/engine';
 import { isSafariLike, AUDIO_FILE_ACCEPT } from '../utils/platform';
 import { Section, Btn, Param, Sel, Badge, FileDrop, XBar } from '../components/ui';
+import { useExcursionStats } from '../components/useExcursionStats';
 import { Plot } from '../components/Plot';
 import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
 
@@ -32,6 +33,7 @@ export function AudioLab() {
   const [eng, setEng] = useState(engine.status());
   const [cursorX, setCursorX] = useState<number | null>(null);
   const [hist, setHist] = useState<[number, number][]>([]);
+  const { stats: exc, reset: resetExc } = useExcursionStats();
   const waveRef = useRef<HTMLCanvasElement>(null);
   const specRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
@@ -323,6 +325,13 @@ export function AudioLab() {
                 <span className="note">v = {(snapshot.v * 1000).toFixed(1)} mm/s · I = {snapshot.i.toFixed(2)} A</span>
                 {snapshot.clip ? <Badge kind="warn">CLIP</Badge> : null}
                 {overLimit ? <Badge kind="warn">EXCURSION</Badge> : null}
+              </div>
+              <div className="row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
+                <Badge kind="est">PEAK (session) {exc.peak.toFixed(2)} mm</Badge>
+                <Badge kind="est">TRAVEL p-p {exc.p2p.toFixed(2)} mm</Badge>
+                <Badge kind="est">Xmax ±{ts.Xmax.toFixed(1)} · p-p {ts.XmaxPP.toFixed(1)} mm</Badge>
+                <Badge kind="est">Vd {(ts.Vd * 1e6).toFixed(0)} cm³</Badge>
+                <Btn small ghost onClick={resetExc}>Reset stats</Btn>
               </div>
             </Section>
             <Section title="Live Driver">

@@ -110,16 +110,23 @@ describe('driver self-balancing', () => {
 });
 
 describe('sanitization keeps valid designs untouched', () => {
-  it('a geometrically consistent design passes through with identical T-S values', () => {
+  it('sanitize is idempotent: a balanced design passes through with identical T-S values', () => {
     const d = base();
-    // 4-layer 50 mm coil needs ≈ 2.4 mm radial gap — make the stock design consistent
-    d.magnet.gapWidth = 3;
-    const a = computeTS(d, mats);
-    const b = computeTS(sanitizeDriver(d), mats);
+    const once = sanitizeDriver(d);          // bends raw values into the
+    const twice = sanitizeDriver(once);      // balanced convention ONCE
+    const a = computeTS(once, mats);
+    const b = computeTS(twice, mats);
     expect(b.Fs).toBeCloseTo(a.Fs, 6);
     expect(b.Re).toBeCloseTo(a.Re, 6);
     expect(b.Bl).toBeCloseTo(a.Bl, 6);
     expect(b.Mms).toBeCloseTo(a.Mms, 9);
+    expect(b.Sd).toBeCloseTo(a.Sd, 9);
+    // ...and the shipped defaults are already balanced: sanitizing changes nothing
+    const raw = base();
+    const san = sanitizeDriver(raw);
+    expect(san.coil.formerDiameter).toBeCloseTo(raw.coil.formerDiameter, 9);
+    expect(san.surround.innerDiameter).toBe(raw.cone.outerDiameter);
+    expect(san.cone.effectiveDiameter).toBeCloseTo(raw.cone.effectiveDiameter, 9);
   });
 
   it('auto-widens a too-tight magnetic gap instead of clipping the coil', () => {

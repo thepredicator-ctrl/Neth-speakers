@@ -209,7 +209,7 @@ describe('Voice-coil winding', () => {
     const w = computeWinding(d.coil, mats);
     // hand calc: pitch = 0.45mm·1.08; 4 layers, 34 turns each
     const pitch = 0.45e-3 * 1.08;
-    const d0 = 51.0e-3;
+    const d0 = 51.55e-3;
     let L = 0;
     for (let k = 0; k < 4; k++) L += Math.PI * (d0 + 2 * k * pitch) * 34;
     const area = (Math.PI / 4) * Math.pow(0.45e-3, 2);
@@ -342,7 +342,9 @@ describe('Audio sync clock', () => {
     clock.play(0, 0);
     clock.pushSample(0.002, 0.05, 5.0);
     expect(clock.renderDisplacement(5.01)).toBeCloseTo(0.002 + 0.05 * 0.01, 12);
-    expect(clock.renderDisplacement(5.5)).toBeCloseTo(0.002 + 0.05 * 0.05, 12); // dt capped
+    // dt capped at the ~2-message horizon (22 ms) so extrapolation cannot
+    // visibly overshoot the true trajectory between worklet messages
+    expect(clock.renderDisplacement(5.5)).toBeCloseTo(0.002 + 0.05 * 0.022, 12);
     expect(clock.healthy(5.1)).toBe(true);
     expect(clock.healthy(5.9)).toBe(false);
   });

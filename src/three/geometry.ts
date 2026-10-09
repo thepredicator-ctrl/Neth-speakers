@@ -1,28 +1,37 @@
 /*
  * Parametric loudspeaker geometry for Three.js.
  *
- * Every component is generated from the DriverParams so dimension edits update
- * the model immediately. Cone/dust-cap/coil move rigidly with displacement;
- * the surround and spider are re-lathed each frame from displacement-dependent
- * profiles (roll flattening / corrugation unrolling); tinsel leads are
- * rebuilt as tubes with a moving attach point.
+ * ALL positions and radii come from computeLayout() (src/physics/layout.ts) —
+ * the single source of truth shared with the physics and the statistics.
+ * Attachments are exact at every excursion:
+ *   cone outer edge ↔ surround inner edge (shared seat plane)
+ *   surround outer edge ↔ frame flange seat (flat landing tab)
+ *   cone inner edge ↔ voice-coil former top (glue lip)
+ *   spider inner edge ↔ former outer wall (same radius, rides with x)
+ *   spider outer edge ↔ basket shelf (fixed seat)
+ *   winding straddles the magnetic gap (gap centre == winding centre)
  *
- * Axis convention: speaker axis = +Y, cone radiates toward +Y ("up/front").
- * y = 0 is the baffle/gasket plane; the motor hangs below (−Y). Units: meters.
+ * Cone/dust-cap/coil/former move rigidly with displacement; the surround and
+ * spider are re-lathed each frame from displacement-dependent profiles whose
+ * endpoints never detach; tinsel leads bond to the former and land on the
+ * terminals. Axis: +Y forward, y = 0 baffle plane, motor below. Units: metres.
  */
 import * as THREE from 'three';
 import type { DriverParams, EnclosureParams } from '../physics/types';
 import type { MaterialDef } from '../physics/types';
 import { mm2m } from '../physics/units';
+import { computeLayout, surroundProfile, spiderProfile, type DriverLayout } from '../physics/layout';
 
 export interface DriverGeometry {
   group: THREE.Group;
-  moving: THREE.Group;                 // cone + dust cap + coil (rigid)
+  moving: THREE.Group;                 // cone + dust cap + coil + former (rigid)
   staticParts: THREE.Group;            // frame + motor (fixed)
   surround: THREE.Mesh;                // deformable
   spider: THREE.Mesh;                  // deformable
   leads: THREE.Group;                  // deformable tubes
   restRing: THREE.Mesh;                // displacement reference ring
+  /** Geometric excursion envelope (m) — visuals are clamped inside it. */
+  limits: { up: number; down: number };
   deform(x: number): void;             // per-frame deformation update
   dispose(): void;
 }
@@ -69,13 +78,14 @@ function windingTexture(copper: string): THREE.CanvasTexture {
 
 export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef | undefined, quality: 'low' | 'med' | 'high'): DriverGeometry {
   const seg = quality === 'low' ? 40 : quality === 'high' ? 96 : 64;
+  const L: DriverLayout = computeLayout(p);
   const group = new THREE.Group();
   const moving = new THREE.Group();
   const staticParts = new THREE.Group();
   const leads = new THREE.Group();
   group.add(staticParts, moving, leads);
 
-  const coneMat = mats(p.cone.materialId);
+  const coneMatDef = mats(p.cone.materialId);
   const coilMatDef = mats(p.coil.wireMaterialId);
   const magMatDef = mats(p.magnet.materialId);
   const steelMat = new THREE.MeshStandardMaterial({ color: '#5b6068', roughness: 0.55, metalness: 0.75, side: THREE.DoubleSide });
@@ -100,51 +110,25 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const plateMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : steelMat;
   const poleUseMat = (p.magnet as { painted?: boolean }).painted ? paintedMat : poleMat;
 
-  /* ---------- key radii ---------- */
-  const rConeOut = mm2m(p.cone.outerDiameter) / 2;
-  const rCoil = mm2m(p.coil.windingDiameter) / 2;
-  const rSurfIn = mm2m(p.surround.innerDiameter) / 2;
-  const rSurfOut = mm2m(p.surround.outerDiameter) / 2;
-  const rFrameOut = rSurfOut + mm2m(6);
-  const depth = mm2m(p.cone.depth);
-  const gapH = mm2m(p.magnet.topPlateThickness);
-  const formerH = mm2m(p.coil.formerHeight);
-
-  /* ---------- layout (y positions) ---------- */
-  const ySeat = 0;                          // surround/cone seat plane
-  const yConeInner = -depth;                // cone at coil junction
-  const ySpider = yConeInner - formerH * 0.15 - mm2m(4);
-  const yGapC = yConeInner - formerH * 0.52; // magnetic gap centre
-  const yTopPlateTop = yGapC + gapH / 2;
-  const yMagTop = yTopPlateTop;
-  const magThk = mm2m(p.magnet.thickness);
-  const backThk = mm2m(p.magnet.backPlateThickness);
-  const yMagBottom = yMagTop - magThk * Math.max(1, p.magnet.count);
-  const yBackTop = yMagBottom;
-  const yBackBottom = yBackTop - backThk;
-  const yFrameRear = yBackBottom + backThk * 0.4;
-  const frameDepth = mm2m(p.frame.depth);
-
-  /* ---------- cone ---------- */
+  /* ---------- cone (inner edge bonded to former, outer to surround) ---------- */
   const coneMatMesh = surf(p.cone.color, p.cone.finish, 0.04);
   const coneProfile: [number, number][] = [];
   const nC = 16;
-  const rConeIn = rCoil + mm2m(p.coil.formerThickness) + mm2m(1.5);
   for (let i = 0; i <= nC; i++) {
     const t = i / nC;
-    const r = rConeIn + (rConeOut - rConeIn) * t;
-    let y = yConeInner + (ySeat - yConeInner) * (p.cone.profile === 'curved' ? Math.pow(t, 0.78) : t);
+    const r = L.rConeIn + (L.rConeOut - L.rConeIn) * t;
+    let y = L.yConeInner + (L.ySeat - L.yConeInner) * (p.cone.profile === 'curved' ? Math.pow(t, 0.78) : t);
     if (p.cone.profile === 'ribbed') {
       y += Math.sin(t * Math.PI * 8) * mm2m(0.7) * (1 - t * 0.4);
     }
     coneProfile.push([r, y]);
   }
-  // small return lip at inner edge (glue joint)
-  coneProfile.unshift([rConeIn - mm2m(1.2), yConeInner - mm2m(1.2)]);
+  // glue lip: small return flange that wraps the former top — visible bond
+  coneProfile.unshift([L.rFormerOut - mm2m(0.6), L.yConeInner - mm2m(0.6)]);
   const cone = lathe(coneProfile, seg, coneMatMesh);
   moving.add(cone);
 
-  /* ---------- dust cap ---------- */
+  /* ---------- dust cap (rides with the cone) ---------- */
   const rCap = mm2m(p.cone.dustCapDiameter) / 2;
   const capProfile: [number, number][] = [];
   const nD = 12;
@@ -152,173 +136,173 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   for (let i = 0; i <= nD; i++) {
     const t = i / nD;
     const r = rCap * (1 - t);
-    const y = yConeInner + mm2m(1.0) + capH * (1 - Math.pow(1 - t, 2) * 0.35) * Math.sin(t * Math.PI / 2);
+    const y = L.yConeInner + mm2m(1.0) + capH * (1 - Math.pow(1 - t, 2) * 0.35) * Math.sin(t * Math.PI / 2);
     capProfile.push([Math.max(r, 1e-4), y]);
   }
-  capProfile.unshift([rCap, yConeInner + mm2m(1.0)]);
+  capProfile.unshift([rCap, L.yConeInner + mm2m(1.0)]);
   const dustCap = lathe(capProfile, seg, surf(coneMatDef_color(p), p.cone.finish === 'gloss' ? 'satin' : 'matte', 0.05));
   moving.add(dustCap);
 
-  /* ---------- voice coil: former + winding layers ---------- */
-  const rFormer = mm2m(p.coil.formerDiameter) / 2;
-  const fT = Math.max(0.12e-3, mm2m(p.coil.formerThickness));
+  /* ---------- voice coil: former + winding straddling the gap ---------- */
+  const fT = L.rFormerOut - L.rFormer;
   const former = new THREE.Mesh(
-    new THREE.CylinderGeometry(rFormer + fT, rFormer + fT, formerH, seg, 1, true),
+    new THREE.CylinderGeometry(L.rFormerOut, L.rFormerOut, L.yFormerTop - L.yFormerBottom, seg, 1, true),
     formerMat
   );
-  const yFormerTop = yConeInner + mm2m(0.5); // flush with the cone junction — nothing pokes through
-  former.position.y = yFormerTop - formerH / 2;
+  former.position.y = (L.yFormerTop + L.yFormerBottom) / 2;
   moving.add(former);
 
   const wireR = mm2m(p.coil.wireDiameter) / 2;
   const layers = Math.max(1, Math.min(4, Math.round(p.coil.layers)));
-  const turns = Math.max(1, Math.round(p.coil.turnsPerLayer));
-  const pitch = mm2m(p.coil.wireDiameter) * 1.08;
-  // AUTO-BALANCE (visual): winding stays ≥ 2.5 mm below the former top and
-  // never pokes through the cone junction.
-  const windTopLimit = formerH - Math.max(mm2m(2.5), formerH * 0.1);
-  const windH = Math.min(turns * pitch, windTopLimit, formerH * 0.92);
-  const yWindTop = yFormerTop - mm2m(2.5) - (p.coil.position / 1000);
-  for (let L = 0; L < layers; L++) {
-    const rIn = rFormer + fT + wireR + L * mm2m(p.coil.wireDiameter);
-    const h = Math.min(windH, yWindTop - (yFormerTop - formerH));
-    if (h <= 0) continue;
+  // winding centred on the magnetic gap (+ coil.position toward the front);
+  // every layer sits ON the former, stacked outward by one wire diameter.
+  const yWindC = L.yWindC;
+  for (let k = 0; k < layers; k++) {
+    const rMid = L.rFormerOut + wireR + k * mm2m(p.coil.wireDiameter);
     const cyl = new THREE.Mesh(
-      new THREE.CylinderGeometry(rIn + wireR * 0.02, rIn + wireR * 0.02, h, seg, 1, true),
+      new THREE.CylinderGeometry(rMid, rMid, L.windH, seg, 1, true),
       copper
     );
-    cyl.position.y = yWindTop - h / 2;
+    cyl.position.y = yWindC;
     moving.add(cyl);
   }
 
-  /* ---------- magnet assembly ---------- */
-  const rPole = mm2m(p.magnet.poleDiameter) / 2;
-  const rMagOD = mm2m(p.magnet.diameter) / 2;
-  const rMagID = mm2m(p.magnet.innerDiameter) / 2;
-  const rTopOD = mm2m(p.magnet.topPlateDiameter) / 2;
-  const rBackOD = mm2m(p.magnet.backPlateDiameter) / 2;
-  const gapWR = mm2m(p.magnet.gapWidth);
-
-  // pole piece: rises from backplate through magnet into the gap; top is flush
-  // with the top-plate top face — nothing protrudes into the coil cavity.
-  const poleTop = yTopPlateTop;
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(rPole, rPole * 1.04, poleTop - yBackTop + backThk, seg), poleUseMat);
-  pole.position.y = (poleTop + yBackTop - backThk) / 2;
+  /* ---------- magnet assembly (gap centre == winding centre) ---------- */
+  // pole piece: from the back plate up to the top-plate top face — flush,
+  // nothing protrudes into the coil bore.
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(L.rPole, L.rPole * 1.04, L.yTopPlateTop - L.yBackBottom, seg),
+    poleUseMat
+  );
+  pole.position.y = (L.yTopPlateTop + L.yBackBottom) / 2;
   staticParts.add(pole);
 
-  // top plate (annulus): ID = rPole + gapWR
+  // top plate (annulus): bore = rPole + gapWidth, exactly gapH tall
   const topPlate = lathe([
-    [rPole + gapWR, yTopPlateTop],
-    [rTopOD, yTopPlateTop],
-    [rTopOD, yTopPlateTop - gapH],
-    [rPole + gapWR, yTopPlateTop - gapH],
+    [L.rGapInner, L.yTopPlateTop],
+    [L.rTopOD, L.yTopPlateTop],
+    [L.rTopOD, L.yTopPlateBottom],
+    [L.rGapInner, L.yTopPlateBottom],
   ], seg, plateMat);
   staticParts.add(topPlate);
 
-  // magnet ring(s)
+  // magnet ring(s) stacked under the top plate
+  const magThk = (L.yMagTop - L.yMagBottom) / Math.max(1, Math.round(p.magnet.count));
   for (let k = 0; k < Math.max(1, Math.round(p.magnet.count)); k++) {
-    const yT = yMagTop - k * magThk - (k > 0 ? mm2m(0.4) : 0);
+    const yT = L.yMagTop - k * magThk - (k > 0 ? mm2m(0.4) : 0);
     const ring = lathe([
-      [rMagID, yT],
-      [rMagOD, yT],
-      [rMagOD, yT - magThk],
-      [rMagID, yT - magThk],
+      [L.rMagID, yT],
+      [L.rMagOD, yT],
+      [L.rMagOD, yT - magThk],
+      [L.rMagID, yT - magThk],
     ], seg, magnetMat);
     staticParts.add(ring);
   }
 
   // back plate
   const backPlate = lathe([
-    [mm2m(3), yBackTop],
-    [rBackOD, yBackTop],
-    [rBackOD, yBackBottom],
-    [mm2m(3), yBackBottom],
+    [mm2m(3), L.yBackTop],
+    [L.rBackOD, L.yBackTop],
+    [L.rBackOD, L.yBackBottom],
+    [mm2m(3), L.yBackBottom],
   ], seg, plateMat);
   staticParts.add(backPlate);
 
   /* ---------- frame / basket ---------- */
   const flangeW = mm2m(7);
   const frontFlange = lathe([
-    [rSurfOut - mm2m(2), ySeat + mm2m(1.4)],
-    [rFrameOut, ySeat + mm2m(1.4)],
-    [rFrameOut, ySeat - flangeW],
-    [rSurfOut - mm2m(4), ySeat - flangeW],
+    [L.rSurfOut - mm2m(2), L.yFrameSeat],
+    [L.rFrameOut, L.yFrameSeat],
+    [L.rFrameOut, L.yFrameSeat - flangeW],
+    [L.rSurfOut - mm2m(4), L.yFrameSeat - flangeW],
   ], seg, frameMat);
+  frontFlange.userData.explodedGroup = 'front';
   staticParts.add(frontFlange);
 
   // gasket (optional)
   if ((p.frame as { gasket?: boolean }).gasket !== false) {
     const gasket = new THREE.Mesh(
-      new THREE.TorusGeometry(rFrameOut - mm2m(2.6), mm2m(p.frame.gasketThickness) / 2, 10, seg),
+      new THREE.TorusGeometry(L.rFrameOut - mm2m(2.6), mm2m(p.frame.gasketThickness) / 2, 10, seg),
       new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.95 })
     );
     gasket.rotation.x = Math.PI / 2;
-    gasket.position.y = ySeat + mm2m(p.frame.gasketThickness) / 2 + mm2m(1.4);
+    gasket.position.y = L.yFrameSeat + mm2m(p.frame.gasketThickness) / 2;
+    gasket.userData.explodedGroup = 'front';
     staticParts.add(gasket);
   }
 
-  // struts: tapered basket legs slanting from the flange underside down to the
-  // rear ring — each oriented along the actual connection line so they always
-  // connect the two rings (never float, never poke through the cone).
+  // struts: tapered basket legs from the flange underside down to the rear
+  // ring — oriented along the actual connection line so they always connect.
   const nStruts = (p.frame as { style?: string }).style === 'diecast' ? 5 : 6;
   const legW = (p.frame as { style?: string }).style === 'diecast' ? mm2m(14) : mm2m(9);
-  const yTop = ySeat - flangeW;
-  const rLegTop = rFrameOut - mm2m(4);
-  const rLegBot = rBackOD + mm2m(6);
+  const yLegTop = L.yFrameSeat - flangeW;
+  const rLegTop = L.rFrameOut - mm2m(4);
+  const rLegBot = L.rBackOD + mm2m(6);
   for (let i = 0; i < nStruts; i++) {
     const ang = (i / nStruts) * Math.PI * 2 + Math.PI / nStruts;
-    const a = new THREE.Vector3(Math.cos(ang) * rLegTop, yTop, Math.sin(ang) * rLegTop);
-    const b = new THREE.Vector3(Math.cos(ang) * rLegBot, yFrameRear + mm2m(2), Math.sin(ang) * rLegBot);
+    const a = new THREE.Vector3(Math.cos(ang) * rLegTop, yLegTop, Math.sin(ang) * rLegTop);
+    const b = new THREE.Vector3(Math.cos(ang) * rLegBot, L.yFrameRear + mm2m(2), Math.sin(ang) * rLegBot);
     const len = a.distanceTo(b);
     const leg = new THREE.Mesh(new THREE.BoxGeometry(legW, len, mm2m(4.5)), frameMat);
     leg.position.copy(a).add(b).multiplyScalar(0.5);
-    // orient the box's +Y axis along (b - a)
     const dir = new THREE.Vector3().subVectors(b, a).normalize();
     leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
     leg.userData.explodedGroup = 'frame';
     staticParts.add(leg);
   }
 
-  // rear ring + spider shelf
+  // rear ring (legs land on it)
   const rearRing = lathe([
-    [rBackOD + mm2m(5), yFrameRear + mm2m(3)],
-    [rBackOD + mm2m(11), yFrameRear + mm2m(3)],
-    [rBackOD + mm2m(11), yFrameRear - mm2m(6)],
-    [rBackOD + mm2m(5), yFrameRear - mm2m(6)],
+    [rLegBot - mm2m(3), L.yFrameRear + mm2m(3)],
+    [rLegBot + mm2m(8), L.yFrameRear + mm2m(3)],
+    [rLegBot + mm2m(8), L.yFrameRear - mm2m(6)],
+    [rLegBot - mm2m(3), L.yFrameRear - mm2m(6)],
   ], seg, frameMat);
+  rearRing.userData.explodedGroup = 'frame';
   staticParts.add(rearRing);
 
+  // spider shelf: sits exactly at the spider plane, inner radius == spider
+  // outer radius — the spider outer edge rests ON this face (no air gap).
+  const rShelfOut = Math.max(L.rMagOD + mm2m(2), L.rSpOut + mm2m(6));
   const shelf = lathe([
-    [mm2m(p.spider.outerDiameter) / 2, ySpider - mm2m(1)],
-    [rMagOD + mm2m(2), ySpider - mm2m(1)],
+    [L.rSpOut, L.yShelfTop],
+    [rShelfOut, L.yShelfTop],
+    [rShelfOut, L.yShelfTop - mm2m(3)],
+    [L.rSpOut, L.yShelfTop - mm2m(3)],
   ], seg, frameMat);
+  shelf.userData.explodedGroup = 'motor';
   staticParts.add(shelf);
 
-  // terminals
+  // terminals (push terminals on the rear ring, ±X)
   const termMat = new THREE.MeshStandardMaterial({ color: '#c9a227', roughness: 0.35, metalness: 0.85 });
+  const termX = rLegBot + mm2m(9);
   for (const sx of [-1, 1]) {
     const term = new THREE.Mesh(new THREE.BoxGeometry(mm2m(14), mm2m(10), mm2m(5)), frameMat);
-    term.position.set(sx * (rBackOD + mm2m(11) + mm2m(2)), yFrameRear, 0);
+    term.position.set(sx * termX, L.yFrameRear, 0);
+    term.userData.explodedGroup = 'frame';
     staticParts.add(term);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.8), mm2m(1.8), mm2m(8), 12), termMat);
-    post.position.set(sx * (rBackOD + mm2m(11) + mm2m(2)), yFrameRear + mm2m(7), 0);
+    post.position.set(sx * termX, L.yFrameRear + mm2m(7), 0);
+    post.userData.explodedGroup = 'frame';
     staticParts.add(post);
   }
 
-  /* ---------- deformables ---------- */
+  /* ---------- deformables (profiles from layout.ts) ---------- */
   const surrMatDef = mats(p.surround.materialId);
   const surroundMat = new THREE.MeshStandardMaterial({
     color: (p.surround as { color?: string }).color ?? surrMatDef?.color ?? '#17181c',
     roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
   });
-  const surround = lathe([[rSurfIn, 0], [rSurfIn + 0.002, 0]], seg, surroundMat);
-  staticParts.add(surround); // geometry replaced per-frame; parented under static root for transforms
+  const surround = lathe(surroundProfile(L, mm2m(p.surround.rollHeight), p.surround.rollCount, 0), seg, surroundMat);
+  surround.userData.explodedGroup = 'front';
+  staticParts.add(surround);
 
   const spiderMat = new THREE.MeshStandardMaterial({
     color: (p.spider as { color?: string }).color ?? mats(p.spider.materialId)?.color ?? '#8a7a5c',
     roughness: 0.85, metalness: 0.0, side: THREE.DoubleSide,
   });
-  const spider = lathe([[mm2m(p.spider.innerDiameter) / 2, ySpider], [mm2m(p.spider.outerDiameter) / 2, ySpider]], seg, spiderMat);
+  const spider = lathe(spiderProfile(L, p.spider.corrugations, mm2m(p.spider.corrDepth), 0), seg, spiderMat);
+  spider.userData.explodedGroup = 'motor';
   staticParts.add(spider);
 
   const leadMat = new THREE.MeshStandardMaterial({ color: '#b87333', roughness: 0.5, metalness: 0.6 });
@@ -331,67 +315,47 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
 
   // rest-position reference ring (thin, at the surround seat)
   const restRing = new THREE.Mesh(
-    new THREE.TorusGeometry(rSurfIn + mm2m(0.6), mm2m(0.35), 8, seg),
+    new THREE.TorusGeometry(L.rSurfIn + mm2m(0.6), mm2m(0.35), 8, seg),
     new THREE.MeshBasicMaterial({ color: '#ff7a1a', transparent: true, opacity: 0.55 })
   );
   restRing.rotation.x = Math.PI / 2;
-  restRing.position.y = ySeat;
+  restRing.position.y = L.ySeat;
   staticParts.add(restRing);
 
   /* ---------- per-frame deformation ---------- */
   const rollH = mm2m(p.surround.rollHeight);
-  const rollW = mm2m(p.surround.rollWidth);
   const rolls = Math.max(1, Math.round(p.surround.rollCount));
-  const corrN = Math.max(3, Math.round(p.spider.corrugations));
+  const corrN = Math.max(0, Math.round(p.spider.corrugations));
   const corrD = mm2m(p.spider.corrDepth);
-  const rSpIn = mm2m(p.spider.innerDiameter) / 2;
-  const rSpOut = mm2m(p.spider.outerDiameter) / 2;
 
   function deform(x: number): void {
-    // --- surround: arcs between cone edge (moves) and frame seat (fixed) ---
-    const pts: THREE.Vector2[] = [];
-    const nS = 26;
-    const span = rSurfOut - rSurfIn;
-    const xN = Math.max(-1, Math.min(1, x / Math.max(rollH * 1.35, 1e-4)));
-    const squash = Math.sqrt(Math.max(0.06, 1 - xN * xN * 0.92));
-    for (let roll = 0; roll < rolls; roll++) {
-      const t0 = roll / rolls, t1 = (roll + 1) / rolls;
-      for (let i = 0; i <= nS; i++) {
-        const t = t0 + ((t1 - t0) * i) / nS;
-        const ph = ((t * rolls) % 1) * Math.PI; // 0..π per roll
-        const r = rSurfIn + span * t;
-        const y = ySeat + x * (1 - t) + rollH * squash * Math.sin(ph) - rollW * 0.22 * (1 - Math.sin(ph));
-        pts.push(new THREE.Vector2(Math.max(r, 1e-4), y));
-      }
-    }
+    // surround: inner edge rides exactly on the cone edge, outer lands on the
+    // frame seat (see surroundProfile — endpoints exact at every x).
     surround.geometry.dispose();
-    surround.geometry = new THREE.LatheGeometry(pts, seg);
+    surround.geometry = new THREE.LatheGeometry(
+      surroundProfile(L, rollH, rolls, x).map(([r, y]) => new THREE.Vector2(r, y)), seg);
 
-    // --- spider: corrugations flatten as excursion grows ---
-    const spts: THREE.Vector2[] = [];
-    const nP = 40;
-    const amp = corrD * (1 / (1 + Math.abs(x) / (0.55 * corrD + 0.4e-3)));
-    for (let i = 0; i <= nP; i++) {
-      const t = i / nP;
-      const r = rSpIn + (rSpOut - rSpIn) * t;
-      const y = ySpider + x * (1 - t) + amp * Math.sin(corrN * t * Math.PI * 2) * Math.sin(t * Math.PI);
-      spts.push(new THREE.Vector2(Math.max(r, 1e-4), y));
-    }
+    // spider: inner edge bonded to the former (rides), outer seated on shelf
     spider.geometry.dispose();
-    spider.geometry = new THREE.LatheGeometry(spts, seg);
+    spider.geometry = new THREE.LatheGeometry(
+      spiderProfile(L, corrN, corrD, x).map(([r, y]) => new THREE.Vector2(r, y)), seg);
 
-    // --- tinsel leads: attached at the cone INNER surface, routed INSIDE the
-    // basket to the terminals — never crossing the surround or frame. ---
-    const rAttach = rConeIn + mm2m(3);
-    const yAttach = yConeInner + mm2m(3) + x;
-    const yTerm = yFrameRear + mm2m(2);
+    // tinsel leads: bonded to the FORMER just above the spider bond, routed
+    // through the basket to the actual terminal posts (±X).
+    const rAttach = L.rFormerOut + mm2m(0.4);
+    const yAttach = L.ySpider + mm2m(1.2) + x;
+    const yTerm = L.yFrameRear + mm2m(6);
     for (let i = 0; i < leadMeshes.length; i++) {
-      const ang = Math.PI * (0.25 + 0.5 * i / Math.max(1, leadMeshes.length - 1));
+      // spread the lead roots around the former; land on the nearest terminal
+      const frac = leadMeshes.length === 1 ? 0.5 : i / (leadMeshes.length - 1);
+      const ang = Math.PI * (0.15 + 0.7 * frac);           // 27°..153° around +Z side
+      const side = i < leadMeshes.length / 2 ? 1 : -1;      // left/right terminal
       const ax = Math.cos(ang) * rAttach, az = Math.sin(ang) * rAttach;
-      const tx = Math.cos(ang) * (rBackOD + mm2m(10)), tz = Math.sin(ang) * (rBackOD + mm2m(10));
+      const tx = side * termX, tz = mm2m(0);
+      const midX = (ax + tx) / 2, midZ = (az + tz) / 2;
       const curve = new THREE.QuadraticBezierCurve3(
         new THREE.Vector3(ax, yAttach, az),
-        new THREE.Vector3(ax * 0.55 + tx * 0.45, (yAttach + yTerm) / 2 - mm2m(4), az * 0.55 + tz * 0.45),
+        new THREE.Vector3(midX, (yAttach + yTerm) / 2 - mm2m(3), midZ),
         new THREE.Vector3(tx, yTerm, tz)
       );
       const g = new THREE.TubeGeometry(curve, 14, mm2m(0.55), 6, false);
@@ -404,6 +368,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   return {
     group, moving, staticParts,
     surround, spider, leads, restRing,
+    limits: { up: L.maxUp, down: L.maxDown },
     deform,
     dispose() {
       group.traverse((o) => {

@@ -568,10 +568,14 @@ export class AudioEngine {
     return { data: this.hist, count: this.histCount, head: this.histIdx };
   }
 
-  /** Render-time displacement (extrapolated to the audio clock's now). */
+  /** Render-time displacement (extrapolated to the audio clock's now).
+   *  Clamped to the mechanical stop: the model state itself is clamped at
+   *  Xmech by the worklet, and extrapolation between snapshots must never
+   *  display a position beyond the mechanical envelope. */
   renderDisplacement(): number {
     if (!this.ctx) return 0;
-    return this.sync.renderDisplacement(this.ctx.currentTime);
+    const x = this.sync.renderDisplacement(this.ctx.currentTime);
+    return Math.min(this.xmech, Math.max(-this.xmech, x));
   }
 
   dispose(): void {

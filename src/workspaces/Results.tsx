@@ -118,8 +118,10 @@ export function Results() {
       lines.push(`Enclosure: ${enc.type} ${enc.internalWidth}×${enc.internalHeight}×${enc.internalDepth} mm (int), wall ${enc.wallThickness} mm, ${enc.driverCount} driver(s) ${enc.wiring}`);
       lines.push(`Fs=${ts.Fs.toFixed(1)} Hz  Qms=${ts.Qms.toFixed(2)}  Qes=${ts.Qes.toFixed(2)}  Qts=${ts.Qts.toFixed(3)}`);
       lines.push(`Vas=${ts.Vas.toFixed(1)} L  Re=${ts.Re.toFixed(2)} Ω  Le=${(ts.Le * 1000).toFixed(2)} mH  Bl=${ts.Bl.toFixed(2)} T·m  Bgap=${ts.Bgap.toFixed(2)} T`);
-      lines.push(`Sd=${(ts.Sd * 1e4).toFixed(1)} cm²  Mms=${(ts.Mms * 1000).toFixed(1)} g  Cms=${(ts.Cms * 1e6).toFixed(0)} µm/N  Rms=${ts.Rms.toFixed(2)} N·s/m`);
-      lines.push(`Xmax=${ts.Xmax.toFixed(1)} mm one-way (peak-to-peak travel ${(ts.Xmax * 2).toFixed(1)} mm, mechanical ±${ts.Xmech.toFixed(1)} mm)`);
+      lines.push(`Sd=${(ts.Sd * 1e4).toFixed(1)} cm² (effective Ø ${(2 * Math.sqrt(ts.Sd / Math.PI) * 1e3).toFixed(1)} mm = cone + ½ surround roll)  Mms=${(ts.Mms * 1000).toFixed(1)} g  Cms=${(ts.Cms * 1e6).toFixed(0)} µm/N  Rms=${ts.Rms.toFixed(2)} N·s/m`);
+      lines.push(`Xmax=${ts.Xmax.toFixed(1)} mm one-way | peak-to-peak travel=${ts.XmaxPP.toFixed(1)} mm | mechanical ±${ts.Xmech.toFixed(1)} mm (geometric envelope −${ts.maxExcDown.toFixed(1)}/+${ts.maxExcUp.toFixed(1)} mm)`);
+      lines.push(`Vd=Sd×Xmax=${(ts.Vd * 1e6).toFixed(0)} cm³ (ONE-WAY convention; p-p would be ${(ts.Vd * 2e6).toFixed(0)} cm³)`);
+      lines.push(`Winding height=${ts.windH.toFixed(1)} mm | gap height=${ts.gapH.toFixed(1)} mm | coil overhang=${ts.coilOverhang.toFixed(2)} mm | ${ts.turnsInGap} of ${ts.turnsTotal} turns in gap`);
       lines.push(`eta0=${(ts.eta0 * 100).toFixed(2)} %  sens=${ts.sens.toFixed(1)} dB/2.83V/1m (piston est.)`);
       lines.push('');
     }

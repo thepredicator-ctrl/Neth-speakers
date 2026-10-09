@@ -189,7 +189,13 @@ export class SpeakerScene {
     this.raf = requestAnimationFrame(this.loop);
     if (!this.running) return;
     const t0 = performance.now();
-    const xRaw = this.getDisp() * this.vizScale;
+    let xRaw = this.getDisp() * this.vizScale;
+    // Visual excursion is clamped to the ASSEMBLY's geometric envelope so no
+    // view mode (including enhanced multiplier) can push the cone through the
+    // basket, magnet or plates. The numeric readouts elsewhere stay unclamped.
+    if (this.driver) {
+      xRaw = Math.min(this.driver.limits.up, Math.max(-this.driver.limits.down, xRaw));
+    }
     // display-only EMA smoothing (measured values elsewhere stay unfiltered)
     const x = this.vizSmooth > 0
       ? this.lastDisp + (xRaw - this.lastDisp) * (1 - this.vizSmooth)

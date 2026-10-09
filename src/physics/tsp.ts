@@ -21,6 +21,7 @@ import type { DriverParams, TSParams } from './types';
 import { computeWinding } from './winding';
 import { computeMagnet, estimateLe } from './magnet';
 import { RHO0, C_SOUND, mm2m, g2kg, clamp } from './units';
+import { computeLayout } from './layout';
 import type { MaterialDef } from './materials';
 
 export function computeTS(p: DriverParams, mats: (id: string) => MaterialDef | undefined): TSParams {
@@ -102,16 +103,30 @@ export function computeTS(p: DriverParams, mats: (id: string) => MaterialDef | u
   const Vas = RHO0 * C_SOUND * C_SOUND * Sd * Sd * Cms * 1e3; // litres
 
   // --- Excursion limits ------------------------------------------------------
+  // Xmax (one-way, linear): how far the coil can travel while keeping the
+  // intended fraction of the winding in the gap.
+  //   overhung : winding TALLER than gap → Xmax = (h_coil − h_gap)/2
+  //   underhung: winding SHORTER than gap → Xmax = (h_gap − h_coil)/2
   const gapH = mm2m(p.magnet.topPlateThickness);
   const windH = w.windingHeight;
-  // Overhung: winding TALLER than gap → Xmax = (h_coil − h_gap)/2
-  // Underhung: winding SHORTER than gap → Xmax = (h_gap − h_coil)/2
   const xmaxCalc = p.coil.config === 'overhung'
     ? Math.max(0, (windH - gapH) / 2)
     : Math.max(0, (gapH - windH) / 2);
-  const Xmax = p.xmaxOverride != null ? p.xmaxOverride : clamp(xmaxCalc * 1e3, 0, 100);
-  const XmechDefault = Math.max(Xmax * 2.5, 1);
-  const Xmech = p.xmechOverride != null ? p.xmechOverride : XmechDefault;
+  // Mechanical limit comes from the ASSEMBLY GEOMETRY (single source of truth:
+  // src/physics/layout.ts) — spider→top-plate clearance, former→back-plate
+  // clearance and the surround roll capability, whichever binds first.
+  const L = computeLayout(p);
+  let Xmax = p.xmaxOverride != null ? p.xmaxOverride : clamp(xmaxCalc * 1e3, 0, 100);
+  let Xmech = p.xmechOverride != null
+    ? Math.max(p.xmechOverride, 0.2)
+    : clamp(L.XmechGeo * 1e3, 0.2, 200);
+  // Ordering guarantee: the mechanical stop can never sit inside the linear
+  // region. If the geometry cannot deliver the requested Xmax, Xmax yields.
+  Xmech = Math.max(Xmech, Xmax);
+  Xmax = Math.min(Xmax, Xmech);
+  const XmaxPP = 2 * Xmax;
+  // Displacement volume — ONE-WAY convention: Vd = Sd × Xmax (not p-p).
+  const Vd = Sd * mm2m(Xmax);
 
   // --- Efficiency & sensitivity ------------------------------------------------
   const eta0 = (RHO0 * Bl * Bl * Sd * Sd) / (2 * Math.PI * C_SOUND * Re * Mms * Mms);
@@ -122,7 +137,9 @@ export function computeTS(p: DriverParams, mats: (id: string) => MaterialDef | u
   return {
     Sd, Mms, Cms, Kms, Rms, Bl, Re, Le: LeEst, Bgap,
     Fs, Qms, Qes, Qts, Vas: VasOut,
-    Xmax, Xmech,
+    Xmax, Xmech, XmaxPP, Vd,
+    windH: windH * 1e3, gapH: gapH * 1e3, coilOverhang: (windH - gapH) / 2 * 1e3,
+    maxExcDown: L.maxDown * 1e3, maxExcUp: L.maxUp * 1e3,
     eta0, sens,
     wireLength: w.wireLength,
     turnsTotal: w.totalTurns,
