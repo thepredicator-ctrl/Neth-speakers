@@ -1,0 +1,66 @@
+name: CI and Pages deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions required for GitHub Pages deployment via Actions.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, and do not cancel in-progress runs.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run physics validation suite (vitest)
+        run: npm test
+
+      - name: Type-check and production build (Pages base path)
+        # The app is fully client-side; build with the repository base path so
+        # assets and the AudioWorklet resolve under /<repo>/ on GitHub Pages.
+        run: npm run build -- --base=/${{ github.event.repository.name }}/
+
+      - name: Verify built artifacts
+        run: |
+          test -f dist/index.html
+          test -f dist/speaker-worklet.js
+          grep -q "assets/" dist/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

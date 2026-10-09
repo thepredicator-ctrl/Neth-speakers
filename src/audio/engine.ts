@@ -110,7 +110,9 @@ export class AudioEngine {
 
     let ok = false;
     try {
-      await ctx.audioWorklet.addModule('/speaker-worklet.js');
+      // BASE_URL keeps the worklet URL correct under any deploy base:
+      // '/' for local/dev/root hosting, '/Neth-speakers/' on GitHub Pages.
+      await ctx.audioWorklet.addModule(`${import.meta.env.BASE_URL}speaker-worklet.js`);
       this.workletReady = true;
       ok = true;
     } catch {
