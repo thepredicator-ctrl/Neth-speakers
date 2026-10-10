@@ -82,8 +82,8 @@ export function PartsEditor() {
               <Param label="Inner Ø" value={driver.surround.innerDiameter} min={20} max={820} unit="mm" onChange={(v) => patch.surround({ innerDiameter: v })} />
               <Param label="Outer Ø" value={driver.surround.outerDiameter} min={30} max={880} unit="mm" onChange={(v) => patch.surround({ outerDiameter: v })} />
               <Param label="Roll count" value={driver.surround.rollCount} min={1} max={3} step={1} digits={0} unit="rolls" onChange={(v) => patch.surround({ rollCount: Math.round(v) })} />
-              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={60} unit="mm" hint="Taller roll = more excursion capability (SPL subs: 25–50 mm). The roll buckles into wrinkles near its travel limit." onChange={(v) => patch.surround({ rollHeight: v })} />
-              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={70} unit="mm" onChange={(v) => patch.surround({ rollWidth: v })} />
+              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={80} unit="mm" hint="Taller roll = more excursion capability (SPL subs: 25–50 mm, monsters up to 80). Auto-grows to cover your Xmax and the strip width. The roll buckles into wrinkles near its travel limit." onChange={(v) => patch.surround({ rollHeight: v })} />
+              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={70} unit="mm" hint="Radial strip width. Auto-scales to ≥ 8 % of the cone Ø so big cones never ride a skinny ribbon." onChange={(v) => patch.surround({ rollWidth: v })} />
               <Sel label="Material" value={driver.surround.materialId} options={matOpts(['surround', 'custom'])} onChange={(v) => patch.surround({ materialId: v })} />
               <Param label="Thickness" value={driver.surround.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.surround({ thickness: v })} />
               <Param label="Axial stiffness" value={driver.surround.stiffness} min={20} max={4000} step={5} digits={0} unit="N/m" badge="user" onChange={(v) => patch.surround({ stiffness: v })} />

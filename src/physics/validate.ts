@@ -89,10 +89,10 @@ export function sanitizeSurround(s: SurroundParams, coneOuter?: number): Surroun
     innerDiameter: inner,
     outerDiameter: inner + 2 * rollWidth,
     rollCount: int(s.rollCount, 1, 2, 1),
-    // rollHeight up to 60 mm: giant SPL subs (18"–24") ship 32–50 mm rolls;
-    // the roll capability is 1.25 × rollHeight (layout.ts) so a 48 mm roll
-    // supports ~60 mm one-way travel.
-    rollHeight: num(s.rollHeight, 0.5, 60, 9),
+    // rollHeight up to 80 mm: monster/SPL builds (18"–24" and beyond) ship
+    // 32–50 mm rolls; the roll capability is 1.25 × rollHeight (layout.ts) so
+    // a 48 mm roll supports ~60 mm one-way travel, an 80 mm roll ~100 mm.
+    rollHeight: num(s.rollHeight, 0.5, 80, 9),
     rollWidth,
     thickness: num(s.thickness, 0.05, 5, 1.2),
     stiffness: num(s.stiffness, 1, 200000, 520),
@@ -234,6 +234,34 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
   let magnet = sanitizeMagnet(d.magnet, coilOuterMM);
   const spider = sanitizeSpider(d.spider, coil.formerDiameter + 2 * coil.formerThickness, magnet.topPlateDiameter);
 
+  // AUTO-BALANCE: the surround STRIP must be proportionate to the cone. A
+  // big cone on a skinny ribbon looks broken and cannot carry a tall roll —
+  // real subwoofer-class surrounds run ≈ 8 % of the cone diameter (X-12:
+  // 20/240, 18" XL: 32/400, 24": 45/560). Grow the strip to match; a
+  // deliberate wider choice is never shrunk.
+  const rollWidthMin = Math.min(70, 0.08 * cone.outerDiameter);
+  if (surround.rollWidth < rollWidthMin) {
+    surround.rollWidth = rollWidthMin;
+    surround.outerDiameter = surround.innerDiameter + 2 * surround.rollWidth;
+  }
+
+  // AUTO-BALANCE: the roll must travel the full linear excursion
+  // (capability ≈ 1.25 × rollHeight, see layout.ts) — the user's Xmax
+  // override counts as much as the coil-in-gap estimate — AND it must keep
+  // crest body in proportion to the strip: a 40 mm-wide ribbon with a 9 mm
+  // crest reads as a flat gasket, not a roll. Floor: ½ × roll width.
+  const windHMM = (coil.windingHeight != null ? coil.windingHeight
+    : coil.turnsPerLayer * coil.wireDiameter * 1.08);
+  const xmaxCalcMM = coil.config === 'overhung'
+    ? Math.max(0, (windHMM - magnet.topPlateThickness) / 2)
+    : Math.max(0, (magnet.topPlateThickness - windHMM) / 2);
+  const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 60) ?? 0) : 0;
+  const xmaxTargetMM = Math.max(xmaxCalcMM, xmaxOvrMM);
+  const rollHeightMin = Math.max(xmaxTargetMM / SURROUND_TRAVEL_FACTOR, 0.5 * surround.rollWidth);
+  if (rollHeightMin > surround.rollHeight) {
+    surround.rollHeight = Math.min(80, rollHeightMin);
+  }
+
   // AUTO-BALANCE: the effective radiating diameter is DERIVED from the drawn
   // geometry — cone body + half the surround roll (piston extends to the
   // middle of the surround). Sd can never contradict the 3D model.
@@ -242,20 +270,6 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     cone.outerDiameter * 0.5,
     cone.outerDiameter * 1.5,
   );
-
-  // AUTO-BALANCE: the surround roll must be able to travel the full linear
-  // excursion (capability ≈ 1.25 × rollHeight, see layout.ts). The user's
-  // Xmax override counts as much as the coil-in-gap estimate.
-  const windHMM = (coil.windingHeight != null ? coil.windingHeight
-    : coil.turnsPerLayer * coil.wireDiameter * 1.08);
-  const xmaxCalcMM = coil.config === 'overhung'
-    ? Math.max(0, (windHMM - magnet.topPlateThickness) / 2)
-    : Math.max(0, (magnet.topPlateThickness - windHMM) / 2);
-  const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 60) ?? 0) : 0;
-  const xmaxTargetMM = Math.max(xmaxCalcMM, xmaxOvrMM);
-  if (xmaxTargetMM > 0) {
-    surround.rollHeight = Math.max(surround.rollHeight, xmaxTargetMM / SURROUND_TRAVEL_FACTOR);
-  }
 
   // AUTO-BALANCE: converge the assembly — the former must house the bond and
   // winding, and the magnet stack must be deep enough that the former bottom

@@ -84,8 +84,8 @@ describe('big-cone presets deliver their spec excursion (15"..24")', () => {
       expect(ts.Xmax).toBeGreaterThan(18);
       // Sd / Vd stay consistent with the drawn geometry
       expect(ts.Vd).toBeCloseTo(ts.Sd * (ts.Xmax * 1e-3), 12);
-      // tall rolls stay inside the sanctioned envelope (≤ 60 mm → 75 mm)
-      expect(s.surround.rollHeight).toBeLessThanOrEqual(60);
+      // tall rolls stay inside the sanctioned envelope (≤ 80 mm crest)
+      expect(s.surround.rollHeight).toBeLessThanOrEqual(80);
     });
   }
 });

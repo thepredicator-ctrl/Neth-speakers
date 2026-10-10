@@ -9,7 +9,7 @@ export function defaultDriver(): DriverParams {
   return {
     cone: {
       outerDiameter: 160,        // 8" class cone body at the surround seat
-      effectiveDiameter: 172,    // auto: cone body + ½ surround roll (Sd source)
+      effectiveDiameter: 173,    // auto: cone body + ½ surround roll (Sd source)
       depth: 30,
       angleDeg: 65,
       thickness: 0.9,
@@ -25,10 +25,10 @@ export function defaultDriver(): DriverParams {
     },
     surround: {
       innerDiameter: 160,        // bonded to the cone edge
-      outerDiameter: 184,        // bonded to the frame seat (inner + 2×roll)
+      outerDiameter: 186,        // bonded to the frame seat (inner + 2×roll)
       rollCount: 1,
       rollHeight: 9,
-      rollWidth: 12,
+      rollWidth: 13,             // ≥ 8 % of the 160 mm cone (auto-balance floor)
       materialId: 'rubber-butyl',
       thickness: 1.2,
       stiffness: 520,            // N/m
