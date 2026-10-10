@@ -326,6 +326,29 @@ export function spiderProfile(
   return pts.map(([r, y]) => [Math.max(r, 1e-4), y] as [number, number]);
 }
 
+/* ---------------------------------------------------------------------------
+ * High-excursion surround wrinkling (pure math — applied per-vertex on the
+ * lathe in geometry.ts). Real half-roll surrounds do not squash silently:
+ * past roughly 55 % of the roll capability the rubber buckles into radial
+ * creases that deepen as the roll flattens toward its limit. The bonded
+ * tabs never wrinkle; the amplitude is zero at rest and grows smoothly.
+ * ------------------------------------------------------------------------- */
+
+/** Wrinkle depth (m) at one-way excursion `xM` for a roll whose one-way
+ *  capability is `rollLimitM` (≈ SURROUND_TRAVEL_FACTOR × rollHeight) and
+ *  whose crest height is `rollHeightM`. Returns 0 below 55 % of the limit. */
+export function surroundWrinkleAmp(xM: number, rollLimitM: number, rollHeightM: number): number {
+  const s = Math.min(1, Math.max(0, (Math.abs(xM) / Math.max(1e-6, rollLimitM) - 0.55) / 0.45));
+  return rollHeightM * 0.09 * Math.pow(s, 1.6);
+}
+
+/** Number of radial buckles around the circumference. Real surrounds crease
+ *  with a wavelength of roughly 2.5 roll heights measured along the rim. */
+export function surroundWrinkleCount(rMidM: number, rollHeightM: number): number {
+  const raw = (2 * Math.PI * rMidM) / Math.max(2.6 * rollHeightM, 0.012);
+  return Math.min(26, Math.max(7, Math.round(raw)));
+}
+
 /** Minimum former height (m) that houses bond zone + winding + bottom margin. */
 export function minFormerHeightM(d: DriverParams): number {
   return computeLayout(d).requiredFormerH;

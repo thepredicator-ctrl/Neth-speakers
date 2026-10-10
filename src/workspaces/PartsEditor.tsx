@@ -52,7 +52,7 @@ export function PartsEditor() {
 
           {part === 'cone' ? (
             <Section title="Cone Diaphragm">
-              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={600} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={800} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
               <div className="note mono" style={{ margin: '2px 0 6px' }}>Effective radiating Ø (auto): {driver.cone.effectiveDiameter.toFixed(1)} mm = cone {driver.cone.outerDiameter.toFixed(1)} + ½×{driver.surround.rollWidth.toFixed(1)} roll — drives Sd</div>
               <Param label="Depth" value={driver.cone.depth} min={2} max={120} unit="mm" onChange={(v) => patch.cone({ depth: v })} />
               <Param label="Side angle (derived)" value={driver.cone.angleDeg} min={5} max={89} unit="°" badge="est" onChange={(v) => patch.cone({ depth: Math.max(2, (driver.cone.outerDiameter / 2 - 25) / Math.tan((v * Math.PI) / 180)) })} />
@@ -79,11 +79,11 @@ export function PartsEditor() {
 
           {part === 'surround' ? (
             <Section title="Surround">
-              <Param label="Inner Ø" value={driver.surround.innerDiameter} min={20} max={600} unit="mm" onChange={(v) => patch.surround({ innerDiameter: v })} />
-              <Param label="Outer Ø" value={driver.surround.outerDiameter} min={30} max={650} unit="mm" onChange={(v) => patch.surround({ outerDiameter: v })} />
+              <Param label="Inner Ø" value={driver.surround.innerDiameter} min={20} max={820} unit="mm" onChange={(v) => patch.surround({ innerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.surround.outerDiameter} min={30} max={880} unit="mm" onChange={(v) => patch.surround({ outerDiameter: v })} />
               <Param label="Roll count" value={driver.surround.rollCount} min={1} max={3} step={1} digits={0} unit="rolls" onChange={(v) => patch.surround({ rollCount: Math.round(v) })} />
-              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={40} unit="mm" hint="Taller roll = more excursion capability" onChange={(v) => patch.surround({ rollHeight: v })} />
-              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={60} unit="mm" onChange={(v) => patch.surround({ rollWidth: v })} />
+              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={60} unit="mm" hint="Taller roll = more excursion capability (SPL subs: 25–50 mm). The roll buckles into wrinkles near its travel limit." onChange={(v) => patch.surround({ rollHeight: v })} />
+              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={70} unit="mm" onChange={(v) => patch.surround({ rollWidth: v })} />
               <Sel label="Material" value={driver.surround.materialId} options={matOpts(['surround', 'custom'])} onChange={(v) => patch.surround({ materialId: v })} />
               <Param label="Thickness" value={driver.surround.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.surround({ thickness: v })} />
               <Param label="Axial stiffness" value={driver.surround.stiffness} min={20} max={4000} step={5} digits={0} unit="N/m" badge="user" onChange={(v) => patch.surround({ stiffness: v })} />
@@ -98,7 +98,7 @@ export function PartsEditor() {
           {part === 'spider' ? (
             <Section title="Spider (suspension)">
               <Param label="Inner Ø" value={driver.spider.innerDiameter} min={10} max={200} unit="mm" onChange={(v) => patch.spider({ innerDiameter: v })} />
-              <Param label="Outer Ø" value={driver.spider.outerDiameter} min={30} max={400} unit="mm" onChange={(v) => patch.spider({ outerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.spider.outerDiameter} min={30} max={700} unit="mm" onChange={(v) => patch.spider({ outerDiameter: v })} />
               <Param label="Corrugations" value={driver.spider.corrugations} min={3} max={20} step={1} digits={0} onChange={(v) => patch.spider({ corrugations: Math.round(v) })} />
               <Param label="Corrugation depth" value={driver.spider.corrDepth} min={0.5} max={15} step={0.1} digits={1} unit="mm" onChange={(v) => patch.spider({ corrDepth: v })} />
               <Sel label="Material" value={driver.spider.materialId} options={matOpts(['spider', 'custom'])} onChange={(v) => patch.spider({ materialId: v })} />

@@ -57,7 +57,7 @@ export function SpeakerLab() {
           </Section>
 
           <Section title="Quick Dimensions">
-            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={600} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
+            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={800} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
             <Param label="Cone depth" value={driver.cone.depth} min={2} max={120} unit="mm" digits={1} onChange={(v) => patchCone({ depth: v })} />
             <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={200} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
             <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={30} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />

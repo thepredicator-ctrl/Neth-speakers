@@ -267,6 +267,148 @@ export const PRESETS: PresetDef[] = [
     amplifier: { driveMode: 'power', powerW: 900, clipEnabled: true, clipVoltageRms: 75, currentLimitA: 0 },
   },
   {
+    id: 'neth15sub', name: 'Neth-15 Sub (15″ long-throw)',
+    blurb: 'Serious 15″ subwoofer: 26 mm roll surround, 3.5″ coil, big ferrite motor.',
+    make: (b) => {
+      const d = clone(b);
+      d.cone.outerDiameter = 340; d.cone.depth = 52; d.cone.thickness = 2.0;
+      d.cone.profile = 'curved'; d.cone.materialId = 'polypropylene'; d.cone.dustCapDiameter = 100;
+      d.surround.innerDiameter = 340; d.surround.outerDiameter = 392;
+      d.surround.rollHeight = 26; d.surround.rollWidth = 26;
+      d.surround.stiffness = 500; d.surround.damping = 0.9; d.surround.materialId = 'rubber-butyl';
+      d.spider.innerDiameter = 90.1; d.spider.outerDiameter = 230;
+      d.spider.corrugations = 12; d.spider.corrDepth = 7;
+      d.spider.stiffness = 850; d.spider.damping = 1.8; d.spider.materialId = 'spider-nomex';
+      d.coil.formerDiameter = 89.1; d.coil.windingDiameter = 90.3; d.coil.formerHeight = 70;
+      d.coil.wireDiameter = 0.6; d.coil.layers = 4; d.coil.turnsPerLayer = 44;
+      d.coil.windingHeight = 50;   // → Xmax = (50 − 11)/2 = 19.5 mm one-way
+      d.coil.formerMaterialId = 'former-alu'; d.coil.mass = 95;
+      d.magnet.materialId = 'ferrite-y35';
+      d.magnet.poleDiameter = 88; d.magnet.topPlateDiameter = 220; d.magnet.topPlateThickness = 11;
+      d.magnet.diameter = 240; d.magnet.innerDiameter = 92; d.magnet.thickness = 30; d.magnet.count = 1;
+      d.magnet.backPlateDiameter = 240; d.magnet.backPlateThickness = 18; d.magnet.gapWidth = 1.6;
+      d.magnet.leakageFactor = 1.8;
+      d.frame.depth = 200; d.frame.style = 'diecast'; d.frame.boot = true; d.frame.tinselLeads = 4;
+      d.frame.color = '#2b2e33';
+      d.qmsTarget = 6.2;
+      d.powerHandlingW = 1000;
+      return d;
+    },
+    enclosure: {
+      type: 'ported', internalWidth: 500, internalHeight: 560, internalDepth: 450,
+      port: { shape: 'round', diameter: 120, length: 340, count: 1, flared: true, slotWidth: 70, slotHeight: 350 },
+      damping: 'lightFill', bracingVolume: 1.2,
+    },
+  },
+  {
+    id: 'neth18xl', name: 'Neth-18 XL (18″ SPL sub)',
+    blurb: 'Competition 18″: 32 mm tall roll, 4″ coil, Xmax ≈ 33 mm one-way, 1500 W.',
+    make: (b) => {
+      const d = clone(b);
+      d.cone.outerDiameter = 400; d.cone.depth = 58; d.cone.thickness = 2.4;
+      d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1c1e22';
+      d.cone.dustCapDiameter = 130; d.cone.dustCapShape = 'dome'; d.cone.mass = 260;
+      d.surround.innerDiameter = 400; d.surround.outerDiameter = 460;
+      d.surround.rollHeight = 32; d.surround.rollWidth = 30;
+      d.surround.stiffness = 1400; d.surround.damping = 1.4; d.surround.materialId = 'rubber-nbr';
+      d.spider.innerDiameter = 100.1; d.spider.outerDiameter = 252;
+      d.spider.corrugations = 13; d.spider.corrDepth = 8;
+      d.spider.stiffness = 6000; d.spider.damping = 2.6; d.spider.materialId = 'spider-nomex';
+      d.coil.formerDiameter = 99.1; d.coil.windingDiameter = 100.4; d.coil.formerHeight = 90;
+      d.coil.wireDiameter = 0.65; d.coil.layers = 4; d.coil.turnsPerLayer = 46;
+      d.coil.windingHeight = 80;   // → Xmax = (80 − 13)/2 ≈ 33.5 mm one-way
+      d.coil.formerMaterialId = 'former-alu'; d.coil.mass = 180;
+      d.magnet.materialId = 'ferrite-y35';
+      d.magnet.poleDiameter = 98; d.magnet.topPlateDiameter = 240; d.magnet.topPlateThickness = 13;
+      d.magnet.diameter = 260; d.magnet.innerDiameter = 102; d.magnet.thickness = 36; d.magnet.count = 1;
+      d.magnet.backPlateDiameter = 260; d.magnet.backPlateThickness = 20; d.magnet.gapWidth = 1.8;
+      d.magnet.leakageFactor = 1.7;
+      d.frame.depth = 230; d.frame.style = 'diecast'; d.frame.boot = true; d.frame.tinselLeads = 4;
+      d.frame.color = '#2b2e33';
+      d.qmsTarget = 6.4;
+      d.powerHandlingW = 1500;
+      return d;
+    },
+    enclosure: {
+      type: 'ported', internalWidth: 580, internalHeight: 640, internalDepth: 500,
+      port: { shape: 'round', diameter: 150, length: 380, count: 2, flared: true, slotWidth: 80, slotHeight: 400 },
+      damping: 'lightFill', bracingVolume: 1.8,
+    },
+    amplifier: { driveMode: 'power', powerW: 1200, clipEnabled: true, clipVoltageRms: 90, currentLimitA: 0 },
+  },
+  {
+    id: 'neth21', name: 'Neth-21 Monster (21″ SPL sub)',
+    blurb: 'Deck-moving 21″: 40 mm roll, 5″ coil, Xmax ≈ 40 mm one-way, 2500 W.',
+    make: (b) => {
+      const d = clone(b);
+      d.cone.outerDiameter = 480; d.cone.depth = 64; d.cone.thickness = 3.0;
+      d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1b1d21';
+      d.cone.dustCapDiameter = 150; d.cone.dustCapShape = 'dome'; d.cone.mass = 380;
+      d.surround.innerDiameter = 480; d.surround.outerDiameter = 552;
+      d.surround.rollHeight = 40; d.surround.rollWidth = 36;
+      d.surround.stiffness = 1800; d.surround.damping = 1.6; d.surround.materialId = 'rubber-nbr';
+      d.spider.innerDiameter = 125.1; d.spider.outerDiameter = 292;
+      d.spider.corrugations = 14; d.spider.corrDepth = 9;
+      d.spider.stiffness = 9000; d.spider.damping = 3.2; d.spider.materialId = 'spider-nomex';
+      d.coil.formerDiameter = 124.1; d.coil.windingDiameter = 125.5; d.coil.formerHeight = 110;
+      d.coil.wireDiameter = 0.8; d.coil.layers = 4; d.coil.turnsPerLayer = 46;
+      d.coil.windingHeight = 96;   // → Xmax = (96 − 15)/2 ≈ 40.5 mm one-way
+      d.coil.formerMaterialId = 'former-alu'; d.coil.mass = 280;
+      d.magnet.materialId = 'ferrite-y35';
+      d.magnet.poleDiameter = 122; d.magnet.topPlateDiameter = 280; d.magnet.topPlateThickness = 15;
+      d.magnet.diameter = 300; d.magnet.innerDiameter = 128; d.magnet.thickness = 40; d.magnet.count = 1;
+      d.magnet.backPlateDiameter = 300; d.magnet.backPlateThickness = 24; d.magnet.gapWidth = 2.2;
+      d.magnet.leakageFactor = 1.65;
+      d.frame.depth = 270; d.frame.style = 'diecast'; d.frame.boot = true; d.frame.tinselLeads = 4;
+      d.frame.color = '#282b30';
+      d.qmsTarget = 6.6;
+      d.powerHandlingW = 2500;
+      return d;
+    },
+    enclosure: {
+      type: 'ported', internalWidth: 680, internalHeight: 760, internalDepth: 580,
+      port: { shape: 'round', diameter: 200, length: 420, count: 1, flared: true, slotWidth: 100, slotHeight: 480 },
+      damping: 'lightFill', bracingVolume: 2.6,
+    },
+    amplifier: { driveMode: 'power', powerW: 2000, clipEnabled: true, clipVoltageRms: 110, currentLimitA: 0 },
+  },
+  {
+    id: 'neth24', name: 'Neth-24 Colossus (24″ SPL sub)',
+    blurb: 'The ceiling of the app: 24″ cone, 48 mm roll surround, 6″ coil, Xmax ≈ 46 mm.',
+    make: (b) => {
+      const d = clone(b);
+      d.cone.outerDiameter = 560; d.cone.depth = 70; d.cone.thickness = 3.2;
+      d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1a1c20';
+      d.cone.dustCapDiameter = 180; d.cone.dustCapShape = 'dome'; d.cone.mass = 520;
+      d.surround.innerDiameter = 560; d.surround.outerDiameter = 644;
+      d.surround.rollHeight = 48; d.surround.rollWidth = 42;
+      d.surround.stiffness = 2200; d.surround.damping = 1.8; d.surround.materialId = 'rubber-nbr';
+      d.spider.innerDiameter = 155.1; d.spider.outerDiameter = 322;
+      d.spider.corrugations = 15; d.spider.corrDepth = 10;
+      d.spider.stiffness = 12000; d.spider.damping = 3.8; d.spider.materialId = 'spider-nomex';
+      d.coil.formerDiameter = 154.1; d.coil.windingDiameter = 155.6; d.coil.formerHeight = 125;
+      d.coil.wireDiameter = 0.9; d.coil.layers = 4; d.coil.turnsPerLayer = 48;
+      d.coil.windingHeight = 108;  // → Xmax = (108 − 16)/2 = 46 mm one-way
+      d.coil.formerMaterialId = 'former-alu'; d.coil.mass = 400;
+      d.magnet.materialId = 'ferrite-y35';
+      d.magnet.poleDiameter = 152; d.magnet.topPlateDiameter = 310; d.magnet.topPlateThickness = 16;
+      d.magnet.diameter = 330; d.magnet.innerDiameter = 158; d.magnet.thickness = 45; d.magnet.count = 1;
+      d.magnet.backPlateDiameter = 330; d.magnet.backPlateThickness = 26; d.magnet.gapWidth = 2.4;
+      d.magnet.leakageFactor = 1.6;
+      d.frame.depth = 300; d.frame.style = 'diecast'; d.frame.boot = true; d.frame.tinselLeads = 4;
+      d.frame.color = '#26292e';
+      d.qmsTarget = 6.8;
+      d.powerHandlingW = 3000;
+      return d;
+    },
+    enclosure: {
+      type: 'ported', internalWidth: 800, internalHeight: 900, internalDepth: 680,
+      port: { shape: 'round', diameter: 250, length: 460, count: 2, flared: true, slotWidth: 120, slotHeight: 560 },
+      damping: 'lightFill', bracingVolume: 3.4,
+    },
+    amplifier: { driveMode: 'power', powerW: 2500, clipEnabled: true, clipVoltageRms: 130, currentLimitA: 0 },
+  },
+  {
     id: 'neth18pr', name: 'Neth-18 PR Sub (18″ + passive radiator)',
     blurb: 'Very low tuning without a long port: 18″ active + 18″ passive radiator.',
     make: (b) => {

@@ -80,7 +80,8 @@ export function sanitizeCone(c: ConeParams): ConeParams {
 
 export function sanitizeSurround(s: SurroundParams, coneOuter?: number): SurroundParams {
   const inner = coneOuter != null ? coneOuter : num(s.innerDiameter, 20, 820, 220);
-  const rollWidth = num(s.rollWidth, 2, 40, 13);
+  // rollWidth up to 70 mm: 21"/24" SPL subs run 36–45 mm half-rolls
+  const rollWidth = num(s.rollWidth, 2, 70, 13);
   return {
     ...s,
     // AUTO-BALANCE: the surround inner edge always bonds to the cone edge,
@@ -88,7 +89,10 @@ export function sanitizeSurround(s: SurroundParams, coneOuter?: number): Surroun
     innerDiameter: inner,
     outerDiameter: inner + 2 * rollWidth,
     rollCount: int(s.rollCount, 1, 2, 1),
-    rollHeight: num(s.rollHeight, 0.5, 30, 9),
+    // rollHeight up to 60 mm: giant SPL subs (18"–24") ship 32–50 mm rolls;
+    // the roll capability is 1.25 × rollHeight (layout.ts) so a 48 mm roll
+    // supports ~60 mm one-way travel.
+    rollHeight: num(s.rollHeight, 0.5, 60, 9),
     rollWidth,
     thickness: num(s.thickness, 0.05, 5, 1.2),
     stiffness: num(s.stiffness, 1, 200000, 520),
