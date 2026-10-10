@@ -4,7 +4,6 @@ import { useApp } from '../store';
 import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
 import { Section, Btn, Param, Sel, Badge, XBar } from '../components/ui';
 import { useExcursionStats } from '../components/useExcursionStats';
-import { suggestedDriveW } from '../physics/amplifier';
 import { engine } from '../audio/engine';
 
 export function Simulator3D() {
@@ -44,7 +43,7 @@ export function Simulator3D() {
   const overLimit = Math.abs(live.mm) > ts.Xmax;
   const overMech = Math.abs(live.mm) > ts.Xmech * 0.98;
   const driver = useApp((s) => s.driver);
-  const xmaxDrive = suggestedDriveW(ts, driver.powerHandlingW);
+  const xmaxDrive = useApp((s) => s.derived.xmaxDriveW);
   const driveActive = live.mm !== 0;
 
   return (
@@ -53,23 +52,25 @@ export function Simulator3D() {
         <div className="side">
           <Section title="Drive (amplifier)">
             <p className="note" style={{ marginTop: 0 }}>
-              Applies to <b>music playback AND test tones</b>. Drive defaults to the level
-              that reaches <b>Xmax at 40 Hz</b> — the excursion this driver was built for.
+              Applies to <b>music playback AND test tones</b>. Drive defaults to the burst level
+              that reaches <b>Xmax at 40 Hz</b> through the real model — the excursion this driver
+              was built for. That level is typically far beyond the continuous rating (back-EMF),
+              which is exactly how bench excursion demos work: short bursts, not sustained power.
             </p>
             <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
               <Btn small onClick={() => patchAmplifier({ driveMode: 'voltage', voltageRms: 2.83 })}>2.83 V ref</Btn>
-              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: xmaxDrive })}>Match Xmax</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: xmaxDrive, clipEnabled: false, currentLimitA: 0 })} title="Burst level that brings a −3 dB 40 Hz tone to one-way Xmax through the real model">Match Xmax (burst)</Btn>
               <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: Math.max(1, Math.round(driver.powerHandlingW / 2)) })}>½ rated</Btn>
               <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: driver.powerHandlingW })}>Rated {driver.powerHandlingW} W</Btn>
             </div>
             {amplifier.driveMode === 'voltage' ? (
               <Param
-                label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={200} step={0.1} digits={1} unit="Vrms" badge="user"
+                label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={600} step={0.1} digits={1} unit="Vrms" badge="user"
                 onChange={(v) => patchAmplifier({ driveMode: 'voltage', voltageRms: v })}
               />
             ) : (
               <Param
-                label="Drive power" value={amplifier.powerW} min={0.5} max={10000} step={1} digits={0} unit="W" badge="user"
+                label="Drive power" value={amplifier.powerW} min={0.5} max={150000} step={1} digits={0} unit="W" badge="user"
                 onChange={(v) => patchAmplifier({ driveMode: 'power', powerW: v })}
               />
             )}
@@ -80,8 +81,8 @@ export function Simulator3D() {
             <p className="note">
               The cone motion comes from the electro-mechanical model driven sample-by-sample by the actual
               signal — never a canned animation. At 2.83 V (lab reference) a high-Bl subwoofer moves only a
-              fraction of a millimetre — that is real physics, not a bug. Use <b>Match Xmax</b> or <b>Rated</b>
-              to see the travel the driver was designed for.
+              fraction of a millimetre — that is real physics, not a bug. Cone travel is always clamped at
+              the geometric mechanical limit, so the view can never over-travel.
             </p>
           </Section>
 

@@ -10,7 +10,7 @@
 import type { EnclosureParams, TSParams } from './types';
 import { cplx, cmul, cdiv, csub, cabs, carg, type Cx } from './linalg';
 import { RHO0, C_SOUND, mm2m, L2m3 } from './units';
-import { zohDiscretize } from './stateSpace';
+import { buildSystem, zohDiscretize, type WiringInfo } from './stateSpace';
 
 export interface FreqCurve {
   f: number[];        // Hz
@@ -44,6 +44,64 @@ export function responseOverGrid(
 }
 
 function cadd(a: Cx, b: Cx): Cx { return { re: a.re + b.re, im: a.im + b.im }; }
+
+/* ------------------------------------------------------------------ */
+/* Drive level that reaches Xmax — exact, through the real model        */
+/* ------------------------------------------------------------------ */
+
+export interface DriveSuggestion {
+  powerW: number;             // W RMS into the wiring load (burst level)
+  vpeakNeeded: number;        // V peak at the amplifier for −3 dBFS tone → Xmax
+  excursionPerVoltM: number;  // |X/u| at fHz (m per amplifier volt)
+}
+
+/**
+ * Exact drive that brings a −3 dBFS sine at fHz to ONE-WAY Xmax through the
+ * REAL linear system — actual enclosure (sealed/ported/PR), wiring, Le, and
+ * the motional (back-EMF) impedance — by inverting the same transfer the
+ * frequency-response plots use, instead of a hand formula.
+ *
+ * Why not a formula: for high-Bl drivers the motional impedance Bl²/Zm is
+ * comparable to or larger than Re at bass frequencies, so a resistive-load
+ * estimate undershoots the true requirement by 3–10× (the visible "physical
+ * mm too small" bug). Ported-box protection near tuning is also included,
+ * because it is part of |X/u|.
+ *
+ * The result is a BURST level: honest physics says reaching Xmax at 40 Hz
+ * with a long-throw sub takes far more than the continuous thermal rating —
+ * short bass-test bursts are exactly how excursion is demonstrated on the
+ * bench. Callers choose their own capping policy; the worklet clamps cone
+ * travel at the geometric Xmech regardless, so the 3D view can never
+ * over-travel even if the user pushes far past this suggestion.
+ */
+export function driveForXmaxW(
+  ts: TSParams,
+  enclosure: EnclosureParams | null,
+  driverDisplacementL: number,
+  wiring: WiringInfo,
+  fHz = 40,
+): DriveSuggestion {
+  const encResult = enclosure ? computeEnclosure(enclosure, ts, driverDisplacementL) : null;
+  const sys = buildSystem({
+    ts,
+    enclosure,
+    encResult,
+    wiring,
+    sourceImpedance: 0,
+    sampleRate: 48000,
+  });
+  const mag = responseOverGrid(sys.A, sys.B, sys.cx, [fHz]).mag[0] || 1e-15;
+  const load = Math.max(0.5, wiring.loadImpedance);
+  const xmaxM = Math.max(1e-4, ts.Xmax * 1e-3);           // m one-way
+  const vpkTone = xmaxM / mag;                            // V peak at −3 dBFS
+  const vpeak = vpkTone / 0.7079;                         // amplifier vpeak
+  const powerW = (vpeak * vpeak) / (2 * load);            // W into nominal load
+  return {
+    powerW: Math.min(150000, Math.max(0.05, powerW)),
+    vpeakNeeded: vpeak,
+    excursionPerVoltM: mag,
+  };
+}
 
 /** Solve M·y = b (complex, small dense) by Gaussian elimination with pivoting. */
 export function solveComplex(M: Cx[][], b: Cx[]): Cx[] {

@@ -12,7 +12,9 @@ import { computeMagnet } from '../physics/magnet';
 import { defaultDriver, defaultEnclosure, defaultAmplifier } from '../physics/defaults';
 import { buildSystem, zohDiscretize, wiringInfo } from '../physics/stateSpace';
 import { computeEnclosure, impedanceAt, impedanceCurve, runDiscrete, steadyStateMag, responseOverGrid } from '../physics/freqresp';
-import { computeAmp, combineImpedance } from '../physics/amplifier';
+import { computeAmp, combineImpedance, suggestedDriveW } from '../physics/amplifier';
+import { driveForXmaxW } from '../physics/freqresp';
+import { sanitizeAmplifier } from '../physics/validate';
 import { SpeakerFilter, sineBlock, logSweep, toneBurst, FS_DEFAULT } from '../physics/dsp';
 import { mm2m, m2mm, g2kg, kg2g, L2m3, m32L, in2mm, mm2in } from '../physics/units';
 import { SyncClock } from '../audio/sync';
@@ -433,5 +435,80 @@ describe('Dynamic model stability', () => {
       expect(Number.isFinite(m)).toBe(true);
       expect(m).toBeLessThan(1);
     }
+  });
+});
+
+/* 20 — Excursion-matched drive suggestions ------------------------------------------
+ * The "physical mm" UX contract: the suggested drive must bring a −3 dBFS
+ * 40 Hz tone to ONE-WAY Xmax through the REAL model (back-EMF, Le, box,
+ * wiring included). A resistive-load estimate undershoots 3–10× for high-Bl
+ * drivers — the exact "1 mm of movement" bug users saw in ×1 physical view. */
+describe('Excursion-matched drive suggestions', () => {
+  const TONE_F = 40;
+  const AMP = Math.pow(10, -3 / 20);
+
+  /** Steady-state peak cone excursion (mm) for a −3 dBFS tone at powerW. */
+  function tonePeakMm(ts: ReturnType<typeof computeTS>, enc: EnclosureParams | null, dispL: number, powerW: number) {
+    const wi = wiringInfo(ts, enc?.driverCount ?? 1, enc?.wiring ?? 'parallel', enc?.coilWiring ?? 'parallel', 1);
+    const amp = computeAmp({ ...defaultAmplifier(), driveMode: 'power', powerW }, ts, wi);
+    const encResult = enc ? computeEnclosure(enc, ts, dispL) : null;
+    const sys = buildSystem({ ts, enclosure: enc, encResult, wiring: wi, sourceImpedance: 0, sampleRate: FS_DEFAULT });
+    const vpeak = amp.vpeak;
+    const fade = Math.round(FS_DEFAULT * 0.3);
+    const start = Math.round(FS_DEFAULT * 0.8);
+    const measure = start + Math.round(FS_DEFAULT * 0.6);
+    const n = start + Math.round(FS_DEFAULT * 2.2);
+    const u = new Float64Array(n);
+    for (let k = start; k < n; k++) {
+      const env = k < start + fade ? 0.5 * (1 - Math.cos((Math.PI * (k - start)) / fade)) : 1;
+      u[k] = env * AMP * vpeak * Math.sin((2 * Math.PI * TONE_F * (k - start)) / FS_DEFAULT);
+    }
+    const res = runDiscrete(sys.A, sys.B, u);
+    let peak = 0;
+    for (let k = measure; k < n; k++) peak = Math.max(peak, Math.abs(res.x[k]));
+    return { mm: peak * 1000, vpeak };
+  }
+
+  it('driveForXmaxW lands a −3 dB 40 Hz tone at Xmax (free air, default driver)', () => {
+    const d = driver();
+    const ts = computeTS(d, mats);
+    const P = driveForXmaxW(ts, null, 1.5, wiringInfo(ts, 1, 'parallel', 'parallel', 1)).powerW;
+    const { mm } = tonePeakMm(ts, null, 1.5, P);
+    expect(mm / ts.Xmax).toBeGreaterThan(0.9);
+    expect(mm / ts.Xmax).toBeLessThan(1.1);
+  });
+
+  it('driveForXmaxW lands Xmax with a ported box (X-12 style long-throw)', () => {
+    const d = { ...driver(), xmaxOverride: 30, powerHandlingW: 1500, coil: { ...driver().coil, re: 3.8, bl: 26.5, mass: 120, windingHeight: 72 }, magnet: { ...driver().magnet, bl: 26.5 } };
+    const ts = computeTS(d, mats);
+    const enc = { ...defaultEnclosure(), type: 'ported' as const, internalWidth: 460, internalHeight: 500, internalDepth: 320 };
+    const wi = wiringInfo(ts, 1, 'parallel', 'parallel', 1);
+    const P = driveForXmaxW(ts, enc, 3.7, wi).powerW;
+    const { mm } = tonePeakMm(ts, enc, 3.7, P);
+    expect(mm / ts.Xmax).toBeGreaterThan(0.85);
+    expect(mm / ts.Xmax).toBeLessThan(1.15);
+  });
+
+  it('analytic suggestedDriveW stays within 12 % of Xmax in free air (default driver)', () => {
+    const ts = computeTS(driver(), mats);
+    const P = suggestedDriveW(ts, 1e9);
+    const { mm } = tonePeakMm(ts, null, 1.5, P);
+    expect(mm / ts.Xmax).toBeGreaterThan(0.88);
+    expect(mm / ts.Xmax).toBeLessThan(1.12);
+  });
+
+  it('high-Bl back-EMF dominates: ignoring it underestimates drive by >2× (regression guard)', () => {
+    const ts = computeTS(driver(), mats);
+    // resistive-only estimate (the old bug): P = Xmax²·|ωZm|²·Re/(1.0025·Bl²)
+    const w = 2 * Math.PI * 40;
+    const zmOmega = Math.abs(ts.Kms - ts.Mms * w * w) || 1;
+    const naive = (Math.pow(ts.Xmax * 1e-3, 2) * zmOmega * zmOmega * ts.Re) / (1.0025 * ts.Bl * ts.Bl);
+    expect(suggestedDriveW(ts, 1e9)).toBeGreaterThan(naive * 2);
+  });
+
+  it('sanitizeAmplifier no longer crushes burst drive levels', () => {
+    const a = sanitizeAmplifier({ ...defaultAmplifier(), driveMode: 'power', powerW: 128000, voltageRms: 500 });
+    expect(a.powerW).toBeGreaterThan(100000);
+    expect(a.voltageRms).toBeGreaterThan(450);
   });
 });

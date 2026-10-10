@@ -369,15 +369,20 @@ export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): Enclosur
 /* ------------------------------------------------------------------ */
 
 export function sanitizeAmplifier(a: AmplifierParams): AmplifierParams {
-  const vRms = num(a.voltageRms, 0.05, 200, 2.83);
-  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 300, 14), vRms) : num(a.clipVoltageRms, 0.1, 300, 14);
+  // Bounds reach bench-burst territory ON PURPOSE: reaching Xmax at 40 Hz with
+  // a high-Bl driver takes far more than the continuous thermal rating (the
+  // motional/back-EMF impedance Bl²/Zm self-limits current). Short bass-test
+  // bursts at 10–100 kW equivalents are exactly how excursion is demonstrated;
+  // clamping here silently amputated the "physical mm" for long-throw drivers.
+  const vRms = num(a.voltageRms, 0.05, 600, 2.83);
+  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 900, 14), vRms) : num(a.clipVoltageRms, 0.1, 900, 14);
   return {
     driveMode: str(a.driveMode, ['voltage', 'power'] as const, 'voltage'),
     voltageRms: vRms,
-    powerW: num(a.powerW, 0.01, 10000, 25),
+    powerW: num(a.powerW, 0.01, 150000, 25),
     clipEnabled: a.clipEnabled === true,
     clipVoltageRms: clip,
-    currentLimitA: num(a.currentLimitA, 0, 200, 0),
+    currentLimitA: num(a.currentLimitA, 0, 1000, 0),
     outputImpedance: num(a.outputImpedance, 0, 8, 0.05),
     bridged: a.bridged === true,
   };

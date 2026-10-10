@@ -53,14 +53,30 @@ export function computeAmp(amp: AmplifierParams, ts: TSParams, w: WiringInfo): A
  */
 export function suggestedDriveW(ts: TSParams, powerHandlingW: number): number {
   const w = 2 * Math.PI * 40;                       // rad/s at 40 Hz
+  // TRUE mechanical impedance |Zm| = |Rms + j(ωMms − Kms/ω)|
+  // (the spring term divides by ω — it does NOT subtract from ω²Mms directly)
   const zm = Math.sqrt(
     Math.pow(ts.Kms - ts.Mms * w * w, 2) + Math.pow(ts.Rms * w, 2),
-  );                                                 // N·s/m (mech impedance)
+  ) / w;
+  // Full electrical impedance including the motional (back-EMF) term.
+  // For high-Bl drivers Bl²/|Zm| is comparable to or larger than Re at bass
+  // frequencies — ignoring it underestimates the needed drive by 3–10×,
+  // which is exactly the "physical mm too small" symptom.
+  // (|Zm| used as a scalar → motional ≈ −j·Bl²/|Zm|; above resonance Zm is
+  // mass-dominated so the phase error is small. The exact path for UI drive
+  // suggestions is driveForXmaxW() which inverts the real state-space model.)
+  const ze = Math.hypot(ts.Re, w * ts.Le - (ts.Bl * ts.Bl) / zm);
   const xmaxM = Math.max(1e-4, ts.Xmax * 1e-3);      // m one-way
-  // x = Bl·I/Zm  →  Vpk = x·Zm·Re/Bl  →  P = (Vpk/√2)²/Re
-  const watts = (xmaxM * xmaxM * zm * zm * ts.Re) / (2 * ts.Bl * ts.Bl);
+  // −3 dBFS tone (peak amplitude a = 0.708): V_pk@coil = a·√(2·P·Re)
+  //   I_pk = V_pk/|Zelec| ; x_pk = Bl·I_pk/(ω·|Zm|) = Xmax
+  //   → P = (Xmax·ω·|Zm|·|Zelec|/Bl)² / (a²·2·Re) = Xmax²·ω²·Zm²·Ze²/(1.0025·Bl²·Re)
+  const voltsPk = (xmaxM * w * zm * ze) / ts.Bl;
+  const watts = (voltsPk * voltsPk) / (1.0025 * ts.Re);
   const rated = Math.max(1, powerHandlingW);
-  return Math.round(Math.min(rated, Math.max(0.5, watts)) * 100) / 100;
+  // NOT capped at rated: for real subwoofers reaching Xmax at 40 Hz takes burst
+  // power beyond the continuous rating — that is honest physics. Callers may
+  // display a "burst" hint and cap for their own policy.
+  return Math.round(Math.min(150000, Math.max(0.5, watts)) * 100) / 100;
 }
 
 export function impedanceLabel(z: number): string {

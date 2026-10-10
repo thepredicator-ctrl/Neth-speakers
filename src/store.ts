@@ -10,9 +10,9 @@ import { defaultDriver, defaultEnclosure, defaultAmplifier, defaultAudio, defaul
 import { computeTS } from './physics/tsp';
 import { computeWinding, type WindingResult } from './physics/winding';
 import { computeMagnet, type MagnetResult } from './physics/magnet';
-import { computeEnclosure } from './physics/freqresp';
+import { computeEnclosure, driveForXmaxW } from './physics/freqresp';
 import { buildSystem, wiringInfo, type SystemModel } from './physics/stateSpace';
-import { computeAmp, suggestedDriveW, type AmpResult } from './physics/amplifier';
+import { computeAmp, type AmpResult } from './physics/amplifier';
 import { MATERIALS } from './physics/materials';
 import { engine, type EngineSnapshot } from './audio/engine';
 import { mm2m, L2m3 } from './physics/units';
@@ -30,6 +30,9 @@ export interface Derived {
   amp: AmpResult;
   encLitres: ReturnType<typeof computeEnclosure> | null;
   driverDisplacementL: number;
+  /** Burst power (W into the wiring load) that brings a −3 dBFS 40 Hz tone to
+   *  one-way Xmax through the REAL model — the "Match Xmax" level. */
+  xmaxDriveW: number;
 }
 
 export interface Workspace {
@@ -80,14 +83,20 @@ interface AppState {
   recompute: () => void;
 }
 
+/** Driver displacement volume estimate (motor + basket below gasket), litres.
+ *  Single source used by both the derived-model build and the drive suggester. */
+export function driverDisplacementL(d: DriverParams): number {
+  return (
+    (Math.PI / 4) * Math.pow(mm2m(d.magnet.diameter), 2) * mm2m(d.magnet.thickness + d.magnet.backPlateThickness + d.magnet.topPlateThickness) * 1e3 +
+    (Math.PI / 4) * Math.pow(mm2m(d.cone.outerDiameter), 2) * mm2m(d.frame.depth * 0.45) * 1e3 * 0.35
+  );
+}
+
 function computeDerived(d: DriverParams, e: EnclosureParams, a: AmplifierParams, mats: (id: string) => MaterialDef | undefined): Derived {
   const ts = computeTS(d, mats);
   const winding = computeWinding(d.coil, mats);
   const magnet = computeMagnet(d.magnet, d.coil, winding, mats);
-  // driver displacement volume estimate (motor + basket below gasket)
-  const driverVolL =
-    (Math.PI / 4) * Math.pow(mm2m(d.magnet.diameter), 2) * mm2m(d.magnet.thickness + d.magnet.backPlateThickness + d.magnet.topPlateThickness) * 1e3 +
-    (Math.PI / 4) * Math.pow(mm2m(d.cone.outerDiameter), 2) * mm2m(d.frame.depth * 0.45) * 1e3 * 0.35;
+  const driverVolL = driverDisplacementL(d);
   const encLitres = computeEnclosure(e, ts, driverVolL);
   const wi = wiringInfo(ts, e.driverCount, e.wiring, e.coilWiring, 1);
   const sys = buildSystem({
@@ -99,7 +108,10 @@ function computeDerived(d: DriverParams, e: EnclosureParams, a: AmplifierParams,
     sampleRate: 48000,
   });
     const amp = computeAmp(a, ts, wi);
-    return { ts, winding, magnet, sys, amp, encLitres, driverDisplacementL: driverVolL };
+    return {
+      ts, winding, magnet, sys, amp, encLitres, driverDisplacementL: driverVolL,
+      xmaxDriveW: driveForXmaxW(ts, e, driverVolL, wi).powerW,
+    };
 }
 
 /** Substeps for the real-time solver by simulation quality. */
@@ -125,15 +137,19 @@ function withDefaults<T>(base: T, patch: unknown): T {
 }
 
 export const useApp = create<AppState>((set, get) => {
-  /** Drive level that shows the driver's rated excursion (see suggestedDriveW).
-   *  Applied automatically on every driver change until the user sets drive
+  /** Drive level that shows the driver's rated excursion: the exact burst
+   *  power that brings a −3 dBFS 40 Hz tone to one-way Xmax through the REAL
+   *  model (driveForXmaxW — includes back-EMF, box, wiring). Applied
+   *  automatically on every driver/enclosure change until the user sets drive
    *  themselves — a fresh/custom build is never left at a 2.83 V reference
    *  that moves a high-Bl sub a fraction of a millimetre. */
   const autoAmp = (driver: DriverParams): AmplifierParams | null => {
     if (get().ampTouched) return null;
     const ts = computeTS(driver, materialFinder(get().customMaterials));
+    const enc = get().enclosure;
+    const wi = wiringInfo(ts, enc.driverCount, enc.wiring, enc.coilWiring, 1);
     const cur = get().amplifier;
-    const powerW = suggestedDriveW(ts, driver.powerHandlingW);
+    const powerW = driveForXmaxW(ts, enc, driverDisplacementL(driver), wi).powerW;
     // keep the user's mode/limit choices, only re-target the level
     return { ...cur, driveMode: 'power', powerW };
   };
@@ -169,16 +185,20 @@ export const useApp = create<AppState>((set, get) => {
   return {
     driver: sanitizeDriver(defaultDriver()),
     enclosure: sanitizeEnclosure(defaultEnclosure(), sanitizeDriver(defaultDriver())),
-    // Fresh session: drive the default driver at its excursion-matched level
-    // (suggestedDriveW) — never the 2.83 V measurement reference.
-    amplifier: sanitizeAmplifier({
-      ...defaultAmplifier(),
-      driveMode: 'power',
-      powerW: suggestedDriveW(
-        computeTS(sanitizeDriver(defaultDriver()), materialFinder([])),
-        sanitizeDriver(defaultDriver()).powerHandlingW,
-      ),
-    }),
+    // Fresh session: drive the default driver at its excursion-matched burst
+    // level (driveForXmaxW — exact, through the real model) — never the
+    // 2.83 V measurement reference that moves a sub a fraction of a mm.
+    amplifier: (() => {
+      const d0 = sanitizeDriver(defaultDriver());
+      const e0 = sanitizeEnclosure(defaultEnclosure(), d0);
+      const ts0 = computeTS(d0, materialFinder([]));
+      const wi0 = wiringInfo(ts0, e0.driverCount, e0.wiring, e0.coilWiring, 1);
+      return sanitizeAmplifier({
+        ...defaultAmplifier(),
+        driveMode: 'power',
+        powerW: driveForXmaxW(ts0, e0, driverDisplacementL(d0), wi0).powerW,
+      });
+    })(),
     audio: defaultAudio(),
     sim: defaultSim(),
     customMaterials: [],
@@ -262,15 +282,32 @@ export const useApp = create<AppState>((set, get) => {
       const driver = sanitizeDriver(withDefaults(defaultDriver(), rec.driver));
       // A saved amplifier block is explicit design intent; if the project has
       // none at all, give it the excursion-matched auto drive.
+      // EXCEPTION: projects saved before excursion-matched drive carry the raw
+      // default amp block (2.83 V reference, 25 W). That was never a user
+      // decision — treating it as "touched" would freeze their restored build
+      // at the 1 mm-of-movement reference this update fixes. Such blocks are
+      // re-targeted to the auto burst drive instead.
       const savedAmp = (rec as { amplifier?: unknown }).amplifier != null;
-      const amp = savedAmp
+      const d0 = defaultAmplifier();
+      const isUntouchedDefaultAmp = (() => {
+        if (!savedAmp) return false;
+        const a = sanitizeAmplifier(withDefaults(defaultAmplifier(), rec.amplifier));
+        return a.driveMode === d0.driveMode
+          && Math.abs(a.voltageRms - d0.voltageRms) < 1e-9
+          && Math.abs(a.powerW - d0.powerW) < 1e-9
+          && a.clipEnabled === false
+          && a.currentLimitA === 0
+          && a.bridged === false;
+      })();
+      const ampExplicit = savedAmp && !isUntouchedDefaultAmp;
+      const amp = ampExplicit
         ? sanitizeAmplifier(withDefaults(defaultAmplifier(), rec.amplifier))
         : sanitizeAmplifier(autoAmp(driver) ?? get().amplifier);
       set({
         driver,
         enclosure: sanitizeEnclosure(withDefaults(defaultEnclosure(), rec.enclosure), driver),
         amplifier: amp,
-        ...(savedAmp ? { ampTouched: true } : null),
+        ...(ampExplicit ? { ampTouched: true } : null),
         audio: sanitizeAudio(withDefaults(defaultAudio(), rec.audio)),
         sim: sanitizeSim(withDefaults(defaultSim(), rec.sim)),
         projectName: typeof rec.name === 'string' ? rec.name.slice(0, 120) : 'Untitled Design',
