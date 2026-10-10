@@ -100,7 +100,7 @@ describe('cone rock / tilt field (one side leads, the other lags)', () => {
   it('rim cap is bounded by Xmech share, roll crest and an absolute ceiling', () => {
     expect(rockRimCapM(0.06, 0.04)).toBeCloseTo(0.0132, 9);   // 22 % of 60 mm
     expect(rockRimCapM(0.2, 0.01)).toBeCloseTo(0.0045, 9);    // roll-bound: 45 % of 10 mm
-    expect(rockRimCapM(1.0, 0.2)).toBeLessThanOrEqual(0.018); // absolute ceiling 18 mm
+    expect(rockRimCapM(1.0, 0.2)).toBeLessThanOrEqual(0.03);  // absolute ceiling 30 mm
     expect(rockRimCapM(0, 0)).toBe(0);
   });
 

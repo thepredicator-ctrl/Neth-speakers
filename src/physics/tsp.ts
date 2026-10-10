@@ -116,10 +116,10 @@ export function computeTS(p: DriverParams, mats: (id: string) => MaterialDef | u
   // src/physics/layout.ts) — spider→top-plate clearance, former→back-plate
   // clearance and the surround roll capability, whichever binds first.
   const L = computeLayout(p);
-  let Xmax = p.xmaxOverride != null ? p.xmaxOverride : clamp(xmaxCalc * 1e3, 0, 100);
+  let Xmax = p.xmaxOverride != null ? p.xmaxOverride : clamp(xmaxCalc * 1e3, 0, 400);
   let Xmech = p.xmechOverride != null
     ? Math.max(p.xmechOverride, 0.2)
-    : clamp(L.XmechGeo * 1e3, 0.2, 200);
+    : clamp(L.XmechGeo * 1e3, 0.2, 800);
   // Ordering guarantee: the mechanical stop can never sit inside the linear
   // region. If the geometry cannot deliver the requested Xmax, Xmax yields.
   Xmech = Math.max(Xmech, Xmax);

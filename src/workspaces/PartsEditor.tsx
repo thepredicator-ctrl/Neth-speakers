@@ -52,19 +52,19 @@ export function PartsEditor() {
 
           {part === 'cone' ? (
             <Section title="Cone Diaphragm">
-              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={800} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
               <div className="note mono" style={{ margin: '2px 0 6px' }}>Effective radiating Ø (auto): {driver.cone.effectiveDiameter.toFixed(1)} mm = cone {driver.cone.outerDiameter.toFixed(1)} + ½×{driver.surround.rollWidth.toFixed(1)} roll — drives Sd</div>
-              <Param label="Depth" value={driver.cone.depth} min={2} max={120} unit="mm" onChange={(v) => patch.cone({ depth: v })} />
+              <Param label="Depth" value={driver.cone.depth} min={2} max={400} unit="mm" onChange={(v) => patch.cone({ depth: v })} />
               <Param label="Side angle (derived)" value={driver.cone.angleDeg} min={5} max={89} unit="°" badge="est" onChange={(v) => patch.cone({ depth: Math.max(2, (driver.cone.outerDiameter / 2 - 25) / Math.tan((v * Math.PI) / 180)) })} />
-              <Param label="Thickness" value={driver.cone.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.cone({ thickness: v })} />
+              <Param label="Thickness" value={driver.cone.thickness} min={0.1} max={20} step={0.05} digits={2} unit="mm" onChange={(v) => patch.cone({ thickness: v })} />
               <Sel label="Material" value={driver.cone.materialId} options={matOpts(['cone', 'custom'])} onChange={(v) => patch.cone({ materialId: v })} />
               <Sel label="Profile" value={driver.cone.profile} options={[{ value: 'straight', label: 'Straight' }, { value: 'curved', label: 'Curved' }, { value: 'ribbed', label: 'Ribbed' }]} onChange={(v) => patch.cone({ profile: v as typeof driver.cone.profile })} />
-              <Param label="Cone mass" value={driver.cone.mass ?? autoConeMass(driver.cone.outerDiameter, driver.cone.depth, driver.cone.thickness)} min={0.5} max={500} step={0.5} digits={1} unit="g"
+              <Param label="Cone mass" value={driver.cone.mass ?? autoConeMass(driver.cone.outerDiameter, driver.cone.depth, driver.cone.thickness)} min={0.5} max={5000} step={0.5} digits={1} unit="g"
                 badge={driver.cone.mass != null ? 'user' : 'est'}
                 onChange={(v) => patch.cone({ mass: v })} />
               {driver.cone.mass != null ? <Btn small ghost onClick={() => patch.cone({ mass: null })}>Auto mass from geometry</Btn> : null}
               <Section title="Dust Cap">
-                <Param label="Diameter" value={driver.cone.dustCapDiameter} min={5} max={250} unit="mm" onChange={(v) => patch.cone({ dustCapDiameter: v })} />
+                <Param label="Diameter" value={driver.cone.dustCapDiameter} min={5} max={1000} unit="mm" onChange={(v) => patch.cone({ dustCapDiameter: v })} />
                 <Sel label="Shape" value={driver.cone.dustCapShape} options={[{ value: 'dome', label: 'Dome' }, { value: 'flat', label: 'Flat' }, { value: 'inverted', label: 'Inverted' }]} onChange={(v) => patch.cone({ dustCapShape: v as typeof driver.cone.dustCapShape })} />
                 <Sel label="Material" value={driver.cone.dustCapMaterialId} options={matOpts(['cone', 'custom'])} onChange={(v) => patch.cone({ dustCapMaterialId: v })} />
               </Section>
@@ -79,15 +79,15 @@ export function PartsEditor() {
 
           {part === 'surround' ? (
             <Section title="Surround">
-              <Param label="Inner Ø" value={driver.surround.innerDiameter} min={20} max={820} unit="mm" onChange={(v) => patch.surround({ innerDiameter: v })} />
-              <Param label="Outer Ø" value={driver.surround.outerDiameter} min={30} max={880} unit="mm" onChange={(v) => patch.surround({ outerDiameter: v })} />
-              <Param label="Roll count" value={driver.surround.rollCount} min={1} max={3} step={1} digits={0} unit="rolls" onChange={(v) => patch.surround({ rollCount: Math.round(v) })} />
-              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={110} unit="mm" hint="Taller roll = more excursion capability (SPL subs: 25–60 mm, monsters to 110). Auto-grows to ≈ 1.3 × your Xmax and never below half the strip width. The roll buckles into wrinkles near its travel limit." onChange={(v) => patch.surround({ rollHeight: v })} />
-              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={70} unit="mm" hint="Radial strip width. Auto-scales to ≥ 8 % of the cone Ø so big cones never ride a skinny ribbon." onChange={(v) => patch.surround({ rollWidth: v })} />
+              <Param label="Inner Ø" value={driver.surround.innerDiameter} min={20} max={2400} unit="mm" onChange={(v) => patch.surround({ innerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.surround.outerDiameter} min={30} max={2900} unit="mm" onChange={(v) => patch.surround({ outerDiameter: v })} />
+              <Param label="Roll count" value={driver.surround.rollCount} min={1} max={4} step={1} digits={0} unit="rolls" onChange={(v) => patch.surround({ rollCount: Math.round(v) })} />
+              <Param label="Roll height" value={driver.surround.rollHeight} min={2} max={400} unit="mm" hint="UNLIMITED — go as crazy as you want. Taller roll = more excursion capability (capability ≈ 1.25 × roll height). The roll buckles into wrinkles near its travel limit; the flange deepens automatically to match." onChange={(v) => patch.surround({ rollHeight: v })} />
+              <Param label="Roll width" value={driver.surround.rollWidth} min={3} max={250} unit="mm" hint="Radial strip width — unlimited. Auto-scales to ≥ 8 % of the cone Ø so big cones never ride a skinny ribbon." onChange={(v) => patch.surround({ rollWidth: v })} />
               <Sel label="Material" value={driver.surround.materialId} options={matOpts(['surround', 'custom'])} onChange={(v) => patch.surround({ materialId: v })} />
-              <Param label="Thickness" value={driver.surround.thickness} min={0.1} max={5} step={0.05} digits={2} unit="mm" onChange={(v) => patch.surround({ thickness: v })} />
-              <Param label="Axial stiffness" value={driver.surround.stiffness} min={20} max={4000} step={5} digits={0} unit="N/m" badge="user" onChange={(v) => patch.surround({ stiffness: v })} />
-              <Param label="Damping" value={driver.surround.damping} min={0} max={5} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.surround({ damping: v })} />
+              <Param label="Thickness" value={driver.surround.thickness} min={0.1} max={12} step={0.05} digits={2} unit="mm" onChange={(v) => patch.surround({ thickness: v })} />
+              <Param label="Axial stiffness" value={driver.surround.stiffness} min={20} max={20000} step={5} digits={0} unit="N/m" badge="user" onChange={(v) => patch.surround({ stiffness: v })} />
+              <Param label="Damping" value={driver.surround.damping} min={0} max={20} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.surround({ damping: v })} />
               <div className="param"><label>Color</label>
                 <input type="color" value={driver.surround.color} onChange={(e) => patch.surround({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
               </div>
@@ -97,14 +97,14 @@ export function PartsEditor() {
 
           {part === 'spider' ? (
             <Section title="Spider (suspension)">
-              <Param label="Inner Ø" value={driver.spider.innerDiameter} min={10} max={200} unit="mm" onChange={(v) => patch.spider({ innerDiameter: v })} />
-              <Param label="Outer Ø" value={driver.spider.outerDiameter} min={30} max={700} unit="mm" onChange={(v) => patch.spider({ outerDiameter: v })} />
-              <Param label="Corrugations" value={driver.spider.corrugations} min={3} max={20} step={1} digits={0} onChange={(v) => patch.spider({ corrugations: Math.round(v) })} />
-              <Param label="Corrugation depth" value={driver.spider.corrDepth} min={0.5} max={15} step={0.1} digits={1} unit="mm" onChange={(v) => patch.spider({ corrDepth: v })} />
+              <Param label="Inner Ø" value={driver.spider.innerDiameter} min={10} max={1200} unit="mm" onChange={(v) => patch.spider({ innerDiameter: v })} />
+              <Param label="Outer Ø" value={driver.spider.outerDiameter} min={30} max={2200} unit="mm" onChange={(v) => patch.spider({ outerDiameter: v })} />
+              <Param label="Corrugations" value={driver.spider.corrugations} min={3} max={32} step={1} digits={0} onChange={(v) => patch.spider({ corrugations: Math.round(v) })} />
+              <Param label="Corrugation depth" value={driver.spider.corrDepth} min={0.5} max={60} step={0.1} digits={1} unit="mm" onChange={(v) => patch.spider({ corrDepth: v })} />
               <Sel label="Material" value={driver.spider.materialId} options={matOpts(['spider', 'custom'])} onChange={(v) => patch.spider({ materialId: v })} />
-              <Param label="Thickness" value={driver.spider.thickness} min={0.05} max={2} step={0.01} digits={2} unit="mm" onChange={(v) => patch.spider({ thickness: v })} />
-              <Param label="Stiffness" value={driver.spider.stiffness} min={50} max={8000} step={10} digits={0} unit="N/m" badge="user" onChange={(v) => patch.spider({ stiffness: v })} />
-              <Param label="Damping" value={driver.spider.damping} min={0} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.spider({ damping: v })} />
+              <Param label="Thickness" value={driver.spider.thickness} min={0.05} max={6} step={0.01} digits={2} unit="mm" onChange={(v) => patch.spider({ thickness: v })} />
+              <Param label="Stiffness" value={driver.spider.stiffness} min={50} max={20000} step={10} digits={0} unit="N/m" badge="user" onChange={(v) => patch.spider({ stiffness: v })} />
+              <Param label="Damping" value={driver.spider.damping} min={0} max={20} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patch.spider({ damping: v })} />
               <div className="param"><label>Color</label>
                 <input type="color" value={driver.spider.color} onChange={(e) => patch.spider({ color: e.target.value })} style={{ width: 60, height: 28, border: '1px solid var(--line)', background: 'none', borderRadius: 6 }} />
               </div>
@@ -114,19 +114,19 @@ export function PartsEditor() {
 
           {part === 'coil' ? (
             <Section title="Voice Coil">
-              <Param label="Winding Ø (mean)" value={driver.coil.windingDiameter} min={8} max={200} unit="mm" onChange={(v) => patch.coil({ windingDiameter: v })} />
-              <Param label="Former Ø (inner)" value={driver.coil.formerDiameter} min={8} max={190} unit="mm" onChange={(v) => patch.coil({ formerDiameter: v })} />
-              <Param label="Former height" value={driver.coil.formerHeight} min={5} max={120} unit="mm" onChange={(v) => patch.coil({ formerHeight: v })} />
-              <Param label="Former thickness" value={driver.coil.formerThickness} min={0.05} max={2} step={0.01} digits={2} unit="mm" onChange={(v) => patch.coil({ formerThickness: v })} />
+              <Param label="Winding Ø (mean)" value={driver.coil.windingDiameter} min={8} max={620} unit="mm" onChange={(v) => patch.coil({ windingDiameter: v })} />
+              <Param label="Former Ø (inner)" value={driver.coil.formerDiameter} min={8} max={600} unit="mm" onChange={(v) => patch.coil({ formerDiameter: v })} />
+              <Param label="Former height" value={driver.coil.formerHeight} min={5} max={400} unit="mm" onChange={(v) => patch.coil({ formerHeight: v })} />
+              <Param label="Former thickness" value={driver.coil.formerThickness} min={0.05} max={5} step={0.01} digits={2} unit="mm" onChange={(v) => patch.coil({ formerThickness: v })} />
               <Sel label="Former material" value={driver.coil.formerMaterialId} options={matOpts(['former', 'custom'])} onChange={(v) => patch.coil({ formerMaterialId: v })} />
-              <Param label="Wire Ø (bare)" value={driver.coil.wireDiameter} min={0.08} max={1.5} step={0.01} digits={2} unit="mm" onChange={(v) => patch.coil({ wireDiameter: v })} />
+              <Param label="Wire Ø (bare)" value={driver.coil.wireDiameter} min={0.08} max={6} step={0.01} digits={2} unit="mm" onChange={(v) => patch.coil({ wireDiameter: v })} />
               <Sel label="Wire material" value={driver.coil.wireMaterialId} options={matOpts(['wire', 'custom'])} onChange={(v) => patch.coil({ wireMaterialId: v })} />
-              <Param label="Layers" value={driver.coil.layers} min={1} max={4} step={1} digits={0} onChange={(v) => patch.coil({ layers: Math.round(v) })} />
-              <Param label="Turns per layer" value={driver.coil.turnsPerLayer} min={5} max={120} step={1} digits={0} onChange={(v) => patch.coil({ turnsPerLayer: Math.round(v) })} />
-              <Param label="Winding height" value={w.windingHeight * 1000} min={1} max={100} step={0.1} digits={2} unit="mm" badge="est" onChange={(v) => patch.coil({ turnsPerLayer: Math.max(1, Math.round(v / (w.pitch * 1000))) })} hint="Editing this adjusts turns per layer (pitch = wire Ø × 1.08)" />
-              <Param label="Coil temperature" value={driver.coil.temperatureC} min={20} max={200} step={1} digits={0} unit="°C" onChange={(v) => patch.coil({ temperatureC: v })} />
+              <Param label="Layers" value={driver.coil.layers} min={1} max={8} step={1} digits={0} onChange={(v) => patch.coil({ layers: Math.round(v) })} />
+              <Param label="Turns per layer" value={driver.coil.turnsPerLayer} min={5} max={400} step={1} digits={0} onChange={(v) => patch.coil({ turnsPerLayer: Math.round(v) })} />
+              <Param label="Winding height" value={w.windingHeight * 1000} min={1} max={400} step={0.1} digits={2} unit="mm" badge="est" onChange={(v) => patch.coil({ turnsPerLayer: Math.max(1, Math.round(v / (w.pitch * 1000))) })} hint="Editing this adjusts turns per layer (pitch = wire Ø × 1.08)" />
+              <Param label="Coil temperature" value={driver.coil.temperatureC} min={20} max={300} step={1} digits={0} unit="°C" onChange={(v) => patch.coil({ temperatureC: v })} />
               <Sel label="Config" value={driver.coil.config} options={[{ value: 'overhung', label: 'Overhung' }, { value: 'underhung', label: 'Underhung' }]} onChange={(v) => patch.coil({ config: v as typeof driver.coil.config })} />
-              <Param label="Coil position" value={driver.coil.position} min={-10} max={10} step={0.1} digits={1} unit="mm" onChange={(v) => patch.coil({ position: v })} hint="+ = winding shifted toward the front (out of the gap)" />
+              <Param label="Coil position" value={driver.coil.position} min={-driver.coil.formerHeight / 2} max={driver.coil.formerHeight / 2} step={0.1} digits={1} unit="mm" onChange={(v) => patch.coil({ position: v })} hint="+ = winding shifted toward the front (out of the gap)" />
               <div className="row" style={{ marginTop: 6 }}>
                 <Badge kind="est">wire {w.wireLength.toFixed(2)} m</Badge>
                 <Badge kind="est">Re20 {w.Re20.toFixed(2)} Ω</Badge>
@@ -137,12 +137,12 @@ export function PartsEditor() {
                 <Badge kind="est">j {(w.currentDensityAt1W).toFixed(2)} A/mm² @1W</Badge>
               </div>
               {driver.coil.re != null ? <Btn small ghost onClick={() => patch.coil({ re: null })}>Re: use calculated ({w.Re.toFixed(2)} Ω)</Btn> : (
-                <Param label="Re override" value={ts.Re} min={0.5} max={60} step={0.1} digits={2} unit="Ω" badge="user" onChange={(v) => patch.coil({ re: v })} />
+                <Param label="Re override" value={ts.Re} min={0.5} max={200} step={0.1} digits={2} unit="Ω" badge="user" onChange={(v) => patch.coil({ re: v })} />
               )}
               {driver.coil.le != null ? <Btn small ghost onClick={() => patch.coil({ le: null })}>Le: use estimate ({(ts.Le * 1000).toFixed(2)} mH)</Btn> : (
-                <Param label="Le override" value={ts.Le * 1000} min={0.01} max={10} step={0.01} digits={2} unit="mH" badge="user" onChange={(v) => patch.coil({ le: v })} />
+                <Param label="Le override" value={ts.Le * 1000} min={0.01} max={50} step={0.01} digits={2} unit="mH" badge="user" onChange={(v) => patch.coil({ le: v })} />
               )}
-              <Param label="Coil mass override" value={driver.coil.mass ?? w.coilMass * 1000} min={0.5} max={400} step={0.5} digits={1} unit="g"
+              <Param label="Coil mass override" value={driver.coil.mass ?? w.coilMass * 1000} min={0.5} max={5000} step={0.5} digits={1} unit="g"
                 badge={driver.coil.mass != null ? 'user' : 'est'}
                 onChange={(v) => patch.coil({ mass: v })} />
             </Section>
@@ -151,17 +151,17 @@ export function PartsEditor() {
           {part === 'magnet' ? (
             <Section title="Magnet Assembly">
               <Sel label="Magnet material" value={driver.magnet.materialId} options={matOpts(['magnet', 'custom'])} onChange={(v) => patch.magnet({ materialId: v })} />
-              <Param label="Magnets stacked" value={driver.magnet.count} min={1} max={4} step={1} digits={0} onChange={(v) => patch.magnet({ count: Math.round(v) })} />
-              <Param label="Ring outer Ø" value={driver.magnet.diameter} min={20} max={400} unit="mm" onChange={(v) => patch.magnet({ diameter: v })} />
-              <Param label="Ring inner Ø" value={driver.magnet.innerDiameter} min={10} max={380} unit="mm" onChange={(v) => patch.magnet({ innerDiameter: v })} />
-              <Param label="Thickness (each)" value={driver.magnet.thickness} min={3} max={60} unit="mm" onChange={(v) => patch.magnet({ thickness: v })} />
-              <Param label="Pole piece Ø" value={driver.magnet.poleDiameter} min={5} max={200} unit="mm" onChange={(v) => patch.magnet({ poleDiameter: v })} />
-              <Param label="Top plate Ø" value={driver.magnet.topPlateDiameter} min={20} max={380} unit="mm" onChange={(v) => patch.magnet({ topPlateDiameter: v })} />
-              <Param label="Top plate thickness (gap)" value={driver.magnet.topPlateThickness} min={1} max={30} step={0.1} digits={1} unit="mm" onChange={(v) => patch.magnet({ topPlateThickness: v })} />
-              <Param label="Back plate Ø" value={driver.magnet.backPlateDiameter} min={20} max={400} unit="mm" onChange={(v) => patch.magnet({ backPlateDiameter: v })} />
-              <Param label="Back plate thickness" value={driver.magnet.backPlateThickness} min={3} max={60} unit="mm" onChange={(v) => patch.magnet({ backPlateThickness: v })} />
-              <Param label="Gap width (radial)" value={driver.magnet.gapWidth} min={0.2} max={8} step={0.05} digits={2} unit="mm" onChange={(v) => patch.magnet({ gapWidth: v })} />
-              <Param label="Leakage factor σ" value={driver.magnet.leakageFactor} min={1} max={4} step={0.05} digits={2} onChange={(v) => patch.magnet({ leakageFactor: v })} hint="1 = ideal; real ferrite structures 1.8–2.8" />
+              <Param label="Magnets stacked" value={driver.magnet.count} min={1} max={8} step={1} digits={0} onChange={(v) => patch.magnet({ count: Math.round(v) })} />
+              <Param label="Ring outer Ø" value={driver.magnet.diameter} min={20} max={1600} unit="mm" onChange={(v) => patch.magnet({ diameter: v })} />
+              <Param label="Ring inner Ø" value={driver.magnet.innerDiameter} min={10} max={1580} unit="mm" onChange={(v) => patch.magnet({ innerDiameter: v })} />
+              <Param label="Thickness (each)" value={driver.magnet.thickness} min={3} max={200} unit="mm" onChange={(v) => patch.magnet({ thickness: v })} />
+              <Param label="Pole piece Ø" value={driver.magnet.poleDiameter} min={5} max={500} unit="mm" onChange={(v) => patch.magnet({ poleDiameter: v })} />
+              <Param label="Top plate Ø" value={driver.magnet.topPlateDiameter} min={20} max={1600} unit="mm" onChange={(v) => patch.magnet({ topPlateDiameter: v })} />
+              <Param label="Top plate thickness (gap)" value={driver.magnet.topPlateThickness} min={1} max={100} step={0.1} digits={1} unit="mm" onChange={(v) => patch.magnet({ topPlateThickness: v })} />
+              <Param label="Back plate Ø" value={driver.magnet.backPlateDiameter} min={20} max={1600} unit="mm" onChange={(v) => patch.magnet({ backPlateDiameter: v })} />
+              <Param label="Back plate thickness" value={driver.magnet.backPlateThickness} min={3} max={150} unit="mm" onChange={(v) => patch.magnet({ backPlateThickness: v })} />
+              <Param label="Gap width (radial)" value={driver.magnet.gapWidth} min={0.2} max={40} step={0.05} digits={2} unit="mm" onChange={(v) => patch.magnet({ gapWidth: v })} />
+              <Param label="Leakage factor σ" value={driver.magnet.leakageFactor} min={1} max={8} step={0.05} digits={2} onChange={(v) => patch.magnet({ leakageFactor: v })} hint="1 = ideal; real ferrite structures 1.8–2.8" />
               <Toggle label="Painted plates & pole" value={driver.magnet.painted} onChange={(v) => patch.magnet({ painted: v })} hint="Black painted steel in the 3D model (visual only)" />
               <div className="row" style={{ marginTop: 6 }}>
                 <Badge kind={driver.magnet.bGap != null ? 'user' : 'est'}>B gap {ts.Bgap.toFixed(2)} T</Badge>
@@ -171,8 +171,8 @@ export function PartsEditor() {
               {mag.saturationWarn ? <div className="warnbox" style={{ marginTop: 6 }}>Estimated pole flux suggests steel saturation — increase pole Ø or gap height.</div> : null}
               {driver.magnet.bl != null ? <Btn small ghost onClick={() => patch.magnet({ bl: null, bGap: null })}>Use magnetic-circuit estimate</Btn> : (
                 <>
-                  <Param label="B gap override" value={ts.Bgap} min={0.1} max={2} step={0.01} digits={2} unit="T" badge="user" onChange={(v) => patch.magnet({ bGap: v })} />
-                  <Param label="Bl override" value={ts.Bl} min={0.2} max={50} step={0.1} digits={2} unit="T·m" badge="user" onChange={(v) => patch.magnet({ bl: v })} />
+                  <Param label="B gap override" value={ts.Bgap} min={0.1} max={3} step={0.01} digits={2} unit="T" badge="user" onChange={(v) => patch.magnet({ bGap: v })} />
+                  <Param label="Bl override" value={ts.Bl} min={0.2} max={200} step={0.1} digits={2} unit="T·m" badge="user" onChange={(v) => patch.magnet({ bl: v })} />
                 </>
               )}
               <p className="note" style={{ marginBottom: 0 }}>
@@ -184,11 +184,11 @@ export function PartsEditor() {
 
           {part === 'frame' ? (
             <Section title="Frame & Chassis">
-              <Param label="Frame depth" value={driver.frame.depth} min={30} max={300} unit="mm" hint="Auto-grows to house the motor stack if the design needs it" onChange={(v) => patch.frame({ depth: v })} />
-              <Param label="Gasket thickness" value={driver.frame.gasketThickness} min={0.5} max={6} step={0.1} digits={1} unit="mm" onChange={(v) => patch.frame({ gasketThickness: v })} />
+              <Param label="Frame depth" value={driver.frame.depth} min={30} max={1200} unit="mm" hint="Auto-grows to house the motor stack if the design needs it" onChange={(v) => patch.frame({ depth: v })} />
+              <Param label="Gasket thickness" value={driver.frame.gasketThickness} min={0.5} max={12} step={0.1} digits={1} unit="mm" onChange={(v) => patch.frame({ gasketThickness: v })} />
               <Sel label="Terminals" value={driver.frame.terminals} options={[{ value: 'push', label: 'Push tabs' }, { value: 'solder', label: 'Solder lugs' }, { value: 'spring', label: 'Spring clips' }]} onChange={(v) => patch.frame({ terminals: v as typeof driver.frame.terminals })} />
-              <Param label="Tinsel leads" value={driver.frame.tinselLeads} min={2} max={4} step={1} digits={0} onChange={(v) => patch.frame({ tinselLeads: Math.round(v) })} />
-              <Param label="Mounting holes" value={driver.frame.mountingHoles} min={4} max={8} step={1} digits={0} onChange={(v) => patch.frame({ mountingHoles: Math.round(v) })} />
+              <Param label="Tinsel leads" value={driver.frame.tinselLeads} min={2} max={8} step={1} digits={0} onChange={(v) => patch.frame({ tinselLeads: Math.round(v) })} />
+              <Param label="Mounting holes" value={driver.frame.mountingHoles} min={4} max={12} step={1} digits={0} onChange={(v) => patch.frame({ mountingHoles: Math.round(v) })} />
               <Sel label="Frame material" value={driver.frame.materialId} options={matOpts(['frame', 'custom'])} onChange={(v) => patch.frame({ materialId: v })} />
               <Sel label="Basket style" value={driver.frame.style} options={[{ value: 'stamped', label: 'Stamped steel' }, { value: 'diecast', label: 'Die-cast' }]} onChange={(v) => patch.frame({ style: v as typeof driver.frame.style })} />
               <Sel

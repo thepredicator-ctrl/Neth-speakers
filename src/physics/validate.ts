@@ -61,42 +61,43 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 /* ------------------------------------------------------------------ */
 
 export function sanitizeCone(c: ConeParams): ConeParams {
-  const outer = num(c.outerDiameter, 25, 800, 220);
+  // NO artificial ceiling: outer Ø to 2 m (crazy SPL walls), depth to 400 mm
+  const outer = num(c.outerDiameter, 25, 2000, 220);
   return {
     ...c,
     outerDiameter: outer,
     // effective radiating diameter is AUTO-TRACKED in sanitizeDriver
     // (cone body + half the surround roll); this clamp is a defensive bound.
-    effectiveDiameter: clamp(num(c.effectiveDiameter, outer * 0.4, outer * 1.5, outer), 12, 760),
-    depth: num(c.depth, 2, 150, 34),
+    effectiveDiameter: clamp(num(c.effectiveDiameter, outer * 0.4, outer * 1.5, outer), 12, 2000),
+    depth: num(c.depth, 2, 400, 34),
     angleDeg: num(c.angleDeg, 5, 89, 65),
-    thickness: num(c.thickness, 0.05, 10, 0.9),
-    mass: ovr(c.mass, 0.1, 500),
-    dustCapDiameter: clamp(num(c.dustCapDiameter, 0, outer * 0.75, 55), 0, 600),
-    dustCapMass: ovr(c.dustCapMass, 0.05, 200),
+    thickness: num(c.thickness, 0.05, 20, 0.9),
+    mass: ovr(c.mass, 0.1, 5000),
+    dustCapDiameter: clamp(num(c.dustCapDiameter, 0, outer * 0.75, 55), 0, 1200),
+    dustCapMass: ovr(c.dustCapMass, 0.05, 2000),
     color: hexColor(c.color, '#26221c'),
   };
 }
 
 export function sanitizeSurround(s: SurroundParams, coneOuter?: number): SurroundParams {
-  const inner = coneOuter != null ? coneOuter : num(s.innerDiameter, 20, 820, 220);
-  // rollWidth up to 70 mm: 21"/24" SPL subs run 36–45 mm half-rolls
-  const rollWidth = num(s.rollWidth, 2, 70, 13);
+  const inner = coneOuter != null ? coneOuter : num(s.innerDiameter, 20, 2400, 220);
+  // rollWidth to 250 mm and rollHeight to 400 mm — NO practical ceiling:
+  // competition walls and monster builds can go as crazy as the user wants
+  const rollWidth = num(s.rollWidth, 2, 250, 13);
   return {
     ...s,
     // AUTO-BALANCE: the surround inner edge always bonds to the cone edge,
     // and the outer edge always lands at inner + 2×rollWidth.
     innerDiameter: inner,
     outerDiameter: inner + 2 * rollWidth,
-    rollCount: int(s.rollCount, 1, 2, 1),
-    // rollHeight up to 110 mm: monster/SPL builds (18"–24" and beyond) ship
-    // 32–60 mm rolls; the roll capability is 1.25 × rollHeight (layout.ts) so
-    // a 48 mm roll supports ~60 mm one-way travel, a 110 mm roll ~137 mm.
-    rollHeight: num(s.rollHeight, 0.5, 110, 9),
+    rollCount: int(s.rollCount, 1, 4, 1),
+    // roll capability = 1.25 × rollHeight (layout.ts) — a 200 mm roll alone
+    // supports 250 mm one-way travel. Taller = crazier, nothing stops it.
+    rollHeight: num(s.rollHeight, 0.5, 400, 9),
     rollWidth,
-    thickness: num(s.thickness, 0.05, 5, 1.2),
-    stiffness: num(s.stiffness, 1, 200000, 520),
-    damping: num(s.damping, 0.001, 200, 0.55),
+    thickness: num(s.thickness, 0.05, 12, 1.2),
+    stiffness: num(s.stiffness, 1, 2000000, 520),
+    damping: num(s.damping, 0.001, 2000, 0.55),
     color: hexColor((s as { color?: unknown }).color, '#17181c'),
   };
 }
@@ -104,37 +105,37 @@ export function sanitizeSurround(s: SurroundParams, coneOuter?: number): Surroun
 export function sanitizeSpider(sp: SpiderParams, coilFormerOuterMM?: number, topPlateDiamMM?: number): SpiderParams {
   // AUTO-BALANCE: the spider inner edge is BONDED to the former outer wall —
   // the diameters are identical, so the bond can never float or overlap.
-  const inner = coilFormerOuterMM != null ? coilFormerOuterMM : num(sp.innerDiameter, 8, 400, 42);
-  let outer = num(sp.outerDiameter, inner + 10, 700, Math.max(inner + 40, 120));
+  const inner = coilFormerOuterMM != null ? coilFormerOuterMM : num(sp.innerDiameter, 8, 1200, 42);
+  let outer = num(sp.outerDiameter, inner + 10, 2200, Math.max(inner + 40, 120));
   if (topPlateDiamMM != null) outer = clamp(outer, inner + 10, Math.max(inner + 10, topPlateDiamMM + 12));
   return {
     ...sp,
     innerDiameter: inner,
     outerDiameter: outer,
-    corrugations: int(sp.corrugations, 0, 24, 9),
-    corrDepth: num(sp.corrDepth, 0.2, 20, 3.2),
-    thickness: num(sp.thickness, 0.02, 3, 0.35),
-    stiffness: num(sp.stiffness, 10, 1000000, 1080),
-    damping: num(sp.damping, 0.001, 500, 0.85),
+    corrugations: int(sp.corrugations, 0, 32, 9),
+    corrDepth: num(sp.corrDepth, 0.2, 60, 3.2),
+    thickness: num(sp.thickness, 0.02, 6, 0.35),
+    stiffness: num(sp.stiffness, 10, 2000000, 1080),
+    damping: num(sp.damping, 0.001, 2000, 0.85),
     color: hexColor((sp as { color?: unknown }).color, '#8a7a5c'),
   };
 }
 
 export function sanitizeCoil(c: VoiceCoilParams, poleDiameterMM?: number): VoiceCoilParams {
-  const wireD = num(c.wireDiameter, 0.05, 3, 0.45);
+  const wireD = num(c.wireDiameter, 0.05, 6, 0.45);
   const fT = num(c.formerThickness, 0.05, 5, 0.25);
   // AUTO-BALANCE: the former is a tube sliding over the centre pole — its ID
   // always clears the pole OD by a 0.3 mm radial sliding gap per side.
   const minFormerID = poleDiameterMM != null ? poleDiameterMM + 0.6 : 5;
-  const formerD = Math.max(num(c.formerDiameter, 5, 300, 49.4), minFormerID);
-  const layers = int(c.layers, 1, 4, 4);
+  const formerD = Math.max(num(c.formerDiameter, 5, 600, 49.4), minFormerID);
+  const layers = int(c.layers, 1, 8, 4);
   // AUTO-BALANCE: the first winding layer sits ON the former — winding
   // diameter can never be smaller than former OD + 2×thickness + wire.
   const minWind = formerD + 2 * fT + wireD;
-  const windingD = Math.max(num(c.windingDiameter, 5, 320, 51), minWind);
+  const windingD = Math.max(num(c.windingDiameter, 5, 620, 51), minWind);
   // winding height must leave glue margin on the former
-  const formerH = num(c.formerHeight, 3, 150, 26);
-  const turnsPerLayer = int(c.turnsPerLayer, 1, 400, 34);
+  const formerH = num(c.formerHeight, 3, 400, 26);
+  const turnsPerLayer = int(c.turnsPerLayer, 1, 800, 34);
   const maxTurnsFromHeight = Math.max(1, Math.floor((formerH - 3) / (wireD * 1.08)));
   const tpl = Math.min(turnsPerLayer, maxTurnsFromHeight);
   return {
@@ -147,27 +148,29 @@ export function sanitizeCoil(c: VoiceCoilParams, poleDiameterMM?: number): Voice
     layers,
     turnsPerLayer: tpl,
     windingHeight: ovr(c.windingHeight, 1, formerH * 0.98),
-    temperatureC: num(c.temperatureC, -20, 250, 30),
+    temperatureC: num(c.temperatureC, -20, 300, 30),
     position: num(c.position, -formerH / 2, formerH / 2, 0),
-    mass: ovr(c.mass, 0.1, 300),
+    mass: ovr(c.mass, 0.1, 5000),
     re: ovr(c.re, 0.1, 200),
-    le: ovr(c.le, 0.001, 20),
+    le: ovr(c.le, 0.001, 50),
   };
 }
 
 export function sanitizeMagnet(m: MagnetParams, coilOuterMM?: number): MagnetParams {
-  const pole = num(m.poleDiameter, 4, 260, 50);
-  const tpt = num(m.topPlateThickness, 0.5, 40, 7);
+  // NO practical ceiling: pole to 500 mm, plates to 1.6 m, gap to 40 mm,
+  // stacks to 8×200 mm — monster motors welcome
+  const pole = num(m.poleDiameter, 4, 500, 50);
+  const tpt = num(m.topPlateThickness, 0.5, 100, 7);
   // AUTO-BALANCE: the coil stack (incl. all layers + air clearance) must fit
   // the gap. Widen the top plate (gap) if the coil grew instead of crushing
   // the coil into the pole. gapWidth is RADIAL: coil outer radius − pole radius.
-  const gapNeedMM = coilOuterMM != null ? coilOuterMM - pole / 2 + 0.35 : num(m.gapWidth, 0.2, 20, 1);
-  const gapWidth = Math.max(num(m.gapWidth, 0.2, 20, 1), gapNeedMM);
-  const topPlate = Math.max(num(m.topPlateDiameter, pole + 2 * gapWidth, 600, 110), pole + 2 * gapWidth);
+  const gapNeedMM = coilOuterMM != null ? coilOuterMM - pole / 2 + 0.35 : num(m.gapWidth, 0.2, 40, 1);
+  const gapWidth = Math.max(num(m.gapWidth, 0.2, 40, 1), gapNeedMM);
+  const topPlate = Math.max(num(m.topPlateDiameter, pole + 2 * gapWidth, 1600, 110), pole + 2 * gapWidth);
   // magnet ring must cover the top plate and clear the pole
-  const magD = Math.max(num(m.diameter, topPlate, 800, 120), topPlate);
+  const magD = Math.max(num(m.diameter, topPlate, 1600, 120), topPlate);
   const inner = clamp(num(m.innerDiameter, 5, magD - 2, 52), pole, magD - 2);
-  const backD = Math.max(num(m.backPlateDiameter, magD, 800, magD), magD);
+  const backD = Math.max(num(m.backPlateDiameter, magD, 1600, magD), magD);
   return {
     ...m,
     poleDiameter: pole,
@@ -176,12 +179,12 @@ export function sanitizeMagnet(m: MagnetParams, coilOuterMM?: number): MagnetPar
     topPlateThickness: tpt,
     diameter: magD,
     innerDiameter: inner,
-    thickness: num(m.thickness, 2, 80, 18),
-    count: int(m.count, 1, 6, 1),
+    thickness: num(m.thickness, 2, 200, 18),
+    count: int(m.count, 1, 8, 1),
     backPlateDiameter: backD,
-    backPlateThickness: num(m.backPlateThickness, 2, 60, 8),
-    leakageFactor: num(m.leakageFactor, 1, 6, 2.2),
-    bl: ovr(m.bl, 0.05, 80),
+    backPlateThickness: num(m.backPlateThickness, 2, 150, 8),
+    leakageFactor: num(m.leakageFactor, 1, 8, 2.2),
+    bl: ovr(m.bl, 0.05, 200),
     bGap: ovr(m.bGap, 0.02, 3),
     painted: (m as { painted?: unknown }).painted === true,
   };
@@ -190,15 +193,15 @@ export function sanitizeMagnet(m: MagnetParams, coilOuterMM?: number): MagnetPar
 export function sanitizeFrame(f: FrameParams, minDepthMM?: number): FrameParams {
   // AUTO-BALANCE: the frame always houses the full moving motor stack.
   const depth = minDepthMM != null
-    ? Math.max(num(f.depth, 10, 500, 92), minDepthMM)
-    : num(f.depth, 10, 500, 92);
+    ? Math.max(num(f.depth, 10, 1200, 92), minDepthMM)
+    : num(f.depth, 10, 1200, 92);
   return {
     ...f,
     depth,
-    gasketThickness: num(f.gasketThickness, 0, 8, 1.5),
+    gasketThickness: num(f.gasketThickness, 0, 12, 1.5),
     terminals: str(f.terminals, ['push', 'solder', 'spring'] as const, 'push'),
-    tinselLeads: int(f.tinselLeads, 2, 4, 2),
-    mountingHoles: int(f.mountingHoles, 0, 8, 4),
+    tinselLeads: int(f.tinselLeads, 2, 8, 2),
+    mountingHoles: int(f.mountingHoles, 0, 12, 4),
     color: hexColor((f as { color?: unknown }).color, '#33363c'),
     style: str((f as { style?: unknown }).style, ['stamped', 'diecast'] as const, 'stamped'),
     gasket: (f as { gasket?: unknown }).gasket !== false,
@@ -259,11 +262,11 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
   const xmaxCalcMM = coil.config === 'overhung'
     ? Math.max(0, (windHMM - magnet.topPlateThickness) / 2)
     : Math.max(0, (magnet.topPlateThickness - windHMM) / 2);
-  const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 60) ?? 0) : 0;
+  const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 300) ?? 0) : 0;
   const xmaxTargetMM = Math.max(xmaxCalcMM, xmaxOvrMM);
   const rollHeightMin = Math.max(1.3 * xmaxTargetMM, 0.5 * surround.rollWidth);
   if (rollHeightMin > surround.rollHeight) {
-    surround.rollHeight = Math.min(110, rollHeightMin);
+    surround.rollHeight = Math.min(400, rollHeightMin);
   }
 
   // AUTO-BALANCE: the effective radiating diameter is DERIVED from the drawn
@@ -285,7 +288,7 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     let changed = false;
     const minFH = L.requiredFormerH * 1e3;
     if (coil.formerHeight < minFH - 1e-9) {
-      coil = { ...coil, formerHeight: Math.min(300, minFH) };
+      coil = { ...coil, formerHeight: Math.min(800, minFH) };
       changed = true;
     }
     const needStack = L.requiredMagStack * 1e3;
@@ -315,10 +318,10 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     kmsRiseAtXmax: num(d.kmsRiseAtXmax, 0, 3, 0.6),
     rmsOverride: ovr(d.rmsOverride, 0.01, 100),
     qmsTarget: num(d.qmsTarget, 0.3, 25, 5.2),
-    xmechOverride: ovr(d.xmechOverride, 0.2, 120),
-    xmaxOverride: ovr(d.xmaxOverride, 0.05, 60),
-    vasOverride: ovr(d.vasOverride, 0.1, 5000),
-    powerHandlingW: num((d as { powerHandlingW?: unknown }).powerHandlingW, 1, 10000, 150),
+    xmechOverride: ovr(d.xmechOverride, 0.2, 600),
+    xmaxOverride: ovr(d.xmaxOverride, 0.05, 300),
+    vasOverride: ovr(d.vasOverride, 0.1, 20000),
+    powerHandlingW: num((d as { powerHandlingW?: unknown }).powerHandlingW, 1, 200000, 150),
   };
   // AUTO-BALANCE: linear excursion can never exceed the mechanical limit.
   if (out.xmaxOverride != null && out.xmechOverride != null) {
@@ -335,16 +338,16 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
 
 export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): EnclosureParams {
   const minDim = 40;
-  const W = num(e.internalWidth, minDim, 3000, 340);
-  const H = num(e.internalHeight, minDim, 3000, 380);
-  const D = num(e.internalDepth, minDim, 3000, 300);
+  const W = num(e.internalWidth, minDim, 6000, 340);
+  const H = num(e.internalHeight, minDim, 6000, 380);
+  const D = num(e.internalDepth, minDim, 6000, 300);
   const wall = clamp(num(e.wallThickness, 6, 60, 18), 6, Math.min(W, H, D) / 4);
   // AUTO-BALANCE: the port must physically fit inside the box depth.
-  const portLen = clamp(num(e.port.length, 5, Math.max(5, D - 2 * wall), 120), 5, 2000);
-  const portDia = clamp(num(e.port.diameter, 8, Math.min(W, H) * 0.7, 68), 8, 500);
+  const portLen = clamp(num(e.port.length, 5, Math.max(5, D - 2 * wall), 120), 5, 4000);
+  const portDia = clamp(num(e.port.diameter, 8, Math.min(W, H) * 0.7, 68), 8, 1000);
   const prDia = clamp(
     num(e.passive.diameter, 30, Math.max(30, Math.min(W, H) * 0.95), 220),
-    30, 800,
+    30, 1500,
   );
   return {
     ...e,
@@ -369,7 +372,7 @@ export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): Enclosur
       ...e.passive,
       enabled: e.passive.enabled === true,
       diameter: prDia,
-      mass: num(e.passive.mass, 5, 5000, 220),
+      mass: num(e.passive.mass, 5, 20000, 220),
       suspensionStiffness: num(e.passive.suspensionStiffness, 10, 100000, 350),
       damping: num(e.passive.damping, 0.01, 500, 1.2),
     },
@@ -396,15 +399,15 @@ export function sanitizeAmplifier(a: AmplifierParams): AmplifierParams {
   // motional/back-EMF impedance Bl²/Zm self-limits current). Short bass-test
   // bursts at 10–100 kW equivalents are exactly how excursion is demonstrated;
   // clamping here silently amputated the "physical mm" for long-throw drivers.
-  const vRms = num(a.voltageRms, 0.05, 600, 2.83);
-  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 900, 14), vRms) : num(a.clipVoltageRms, 0.1, 900, 14);
+  const vRms = num(a.voltageRms, 0.05, 2000, 2.83);
+  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 3000, 14), vRms) : num(a.clipVoltageRms, 0.1, 3000, 14);
   return {
     driveMode: str(a.driveMode, ['voltage', 'power'] as const, 'voltage'),
     voltageRms: vRms,
-    powerW: num(a.powerW, 0.01, 150000, 25),
+    powerW: num(a.powerW, 0.01, 1000000, 25),
     clipEnabled: a.clipEnabled === true,
     clipVoltageRms: clip,
-    currentLimitA: num(a.currentLimitA, 0, 1000, 0),
+    currentLimitA: num(a.currentLimitA, 0, 5000, 0),
     outputImpedance: num(a.outputImpedance, 0, 8, 0.05),
     bridged: a.bridged === true,
   };

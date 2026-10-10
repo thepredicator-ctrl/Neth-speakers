@@ -154,12 +154,13 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const coneMatDef = mats(p.cone.materialId);
   const coilMatDef = mats(p.coil.wireMaterialId);
   const magMatDef = mats(p.magnet.materialId);
-  const steelMat = new THREE.MeshStandardMaterial({ color: '#5b6068', roughness: 0.55, metalness: 0.75, side: THREE.DoubleSide });
-  const poleMat = new THREE.MeshStandardMaterial({ color: '#6a6f77', roughness: 0.5, metalness: 0.8, side: THREE.DoubleSide });
+  const steelMat = new THREE.MeshStandardMaterial({ color: '#5b6068', roughness: 0.42, metalness: 0.85, envMapIntensity: 1.15, side: THREE.DoubleSide });
+  const poleMat = new THREE.MeshStandardMaterial({ color: '#6a6f77', roughness: 0.36, metalness: 0.9, envMapIntensity: 1.15, side: THREE.DoubleSide });
   const frameMat = new THREE.MeshStandardMaterial({
     color: (p.frame as { color?: string }).color ?? '#33363c',
-    roughness: (p.frame as { style?: string }).style === 'diecast' ? 0.42 : 0.52,
-    metalness: (p.frame as { style?: string }).style === 'diecast' ? 0.85 : 0.62,
+    roughness: (p.frame as { style?: string }).style === 'diecast' ? 0.34 : 0.46,
+    metalness: (p.frame as { style?: string }).style === 'diecast' ? 0.92 : 0.74,
+    envMapIntensity: 1.2,
     side: THREE.DoubleSide,
   });
   const formerMat = new THREE.MeshStandardMaterial({ color: mats(p.coil.formerMaterialId)?.color ?? '#6b4d1e', roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
@@ -330,49 +331,64 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   pole.position.y = (L.yTopPlateTop + L.yBackBottom) / 2;
   staticParts.add(pole);
 
-  // top plate (annulus): bore = rPole + gapWidth, exactly gapH tall
-  const topPlate = lathe([
-    [L.rGapInner, L.yTopPlateTop],
-    [L.rTopOD, L.yTopPlateTop],
-    [L.rTopOD, L.yTopPlateBottom],
-    [L.rGapInner, L.yTopPlateBottom],
-  ], seg, plateMat);
-  staticParts.add(topPlate);
+  // top plate (annulus): bore = rPole + gapWidth, exactly gapH tall —
+  // chamfered top-outer edge like a machined plate
+  {
+    const chT = Math.min(mm2m(1.4), (L.yTopPlateTop - L.yTopPlateBottom) * 0.22, (L.rTopOD - L.rGapInner) * 0.18);
+    const topPlate = lathe([
+      [L.rGapInner, L.yTopPlateTop],
+      [L.rTopOD - chT, L.yTopPlateTop],
+      [L.rTopOD, L.yTopPlateTop - chT],
+      [L.rTopOD, L.yTopPlateBottom],
+      [L.rGapInner, L.yTopPlateBottom],
+    ], seg, plateMat);
+    staticParts.add(topPlate);
+  }
 
-  // magnet ring(s) stacked under the top plate
+  // magnet ring(s) stacked under the top plate — chamfered outer edges like
+  // real ferrite blocks, so each ring reads as a separate machined part
   const magThk = (L.yMagTop - L.yMagBottom) / Math.max(1, Math.round(p.magnet.count));
   for (let k = 0; k < Math.max(1, Math.round(p.magnet.count)); k++) {
     const yT = L.yMagTop - k * magThk - (k > 0 ? mm2m(0.4) : 0);
+    const chM = Math.min(magThk * 0.18, mm2m(1.6));
     const ring = lathe([
       [L.rMagID, yT],
-      [L.rMagOD, yT],
-      [L.rMagOD, yT - magThk],
+      [L.rMagOD - chM, yT],
+      [L.rMagOD, yT - chM],
+      [L.rMagOD, yT - magThk + chM],
+      [L.rMagOD - chM, yT - magThk],
       [L.rMagID, yT - magThk],
     ], seg, magnetMat);
     staticParts.add(ring);
   }
 
-  // back plate
-  const backPlate = lathe([
-    [mm2m(3), L.yBackTop],
-    [L.rBackOD, L.yBackTop],
-    [L.rBackOD, L.yBackBottom],
-    [mm2m(3), L.yBackBottom],
-  ], seg, plateMat);
-  staticParts.add(backPlate);
+  // back plate — chamfered both outer edges like a machined steel disc
+  {
+    const chB = Math.min(mm2m(1.8), (L.yBackTop - L.yBackBottom) * 0.22);
+    const backPlate = lathe([
+      [mm2m(3), L.yBackTop],
+      [L.rBackOD - chB, L.yBackTop],
+      [L.rBackOD, L.yBackTop - chB],
+      [L.rBackOD, L.yBackBottom + chB],
+      [L.rBackOD - chB, L.yBackBottom],
+      [mm2m(3), L.yBackBottom],
+    ], seg, plateMat);
+    staticParts.add(backPlate);
+  }
 
   /* ---------- motor boot (rubber cover over the stack) ---------- */
   if (L.boot) {
     const rb = L.rBoot;
     const h = L.yBootTop - L.yBootBottom;
     const rC = Math.min(rb * 0.16, h * 0.28);
+    const rTopW = rb * 0.99, rBotW = rb * 1.028;      // gentle taper — wider at the base
     const bp: [number, number][] = [];
     bp.push([rb * 0.28, L.yBootTop]);                 // top face (under the plate ring)
-    bp.push([rb, L.yBootTop]);                        // top outer edge
-    bp.push([rb, L.yBootBottom + rC]);                // straight wall
+    bp.push([rTopW, L.yBootTop]);                     // top outer edge
+    bp.push([rBotW, L.yBootBottom + rC]);             // tapered wall
     for (let i = 1; i <= 6; i++) {                    // rounded bottom corner
       const a = (i / 6) * Math.PI / 2;
-      bp.push([rb - rC * (1 - Math.sin(a)), L.yBootBottom + rC - rC * (1 - Math.cos(a))]);
+      bp.push([rBotW - rC * (1 - Math.sin(a)), L.yBootBottom + rC - rC * (1 - Math.cos(a))]);
     }
     bp.push([rb * 0.55, L.yBootBottom]);              // bottom face
     bp.push([rb * 0.30, L.yBootBottom - h * 0.06]);   // centre vents down (pole vent)
@@ -392,21 +408,41 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     bead.position.y = L.yBootBottom + h * 0.22;
     bead.userData.explodedGroup = 'motor';
     staticParts.add(bead);
+    // upper clamp bead hugging the tapered wall — two beads read as a real
+    // rubber motor cover instead of a plastic pipe
+    const bead2 = new THREE.Mesh(new THREE.TorusGeometry(rb * 0.998, mm2m(1.7), 10, seg), bootMat);
+    bead2.rotation.x = Math.PI / 2;
+    bead2.position.y = L.yBootTop - h * 0.2;
+    bead2.userData.explodedGroup = 'motor';
+    staticParts.add(bead2);
   }
 
-  /* ---------- frame / basket ---------- */
-  const flangeW = mm2m(7);
-  // rolled lip: both outer corners filleted like a real stamped/cast flange
+  /* ---------- frame / basket ----------
+   * Cast-basket front end: a raised surround-seat platform (the surround
+   * landing sits on it), a rounded step down to the main mounting face,
+   * countersunk bolt holes and a flange depth that scales with tall rolls. */
+  const rollHM = mm2m(p.surround.rollHeight);
+  const flangeW = Math.max(mm2m(7), Math.min(mm2m(26), rollHM * 0.42));
+  const yMain = L.yFrameSeat - mm2m(2.4);                 // main (lower) mounting face
+  const rSeatPlat = L.rSurfOut + Math.max(mm2m(2), (L.rFrameOut - L.rSurfOut) * 0.34);
   const flangePts: [number, number][] = [];
   {
-    const lipR = mm2m(2);
+    const lipR = mm2m(1.8);
     const rIn = L.rSurfOut - mm2m(2), rOut = L.rFrameOut;
-    const yT = L.yFrameSeat, yB = L.yFrameSeat - flangeW;
-    flangePts.push([rIn, yT]);
-    // top face → rounded top-outer corner
-    for (let i = 0; i <= 4; i++) {
+    const yB = L.yFrameSeat - flangeW;
+    flangePts.push([rIn, L.yFrameSeat]);                    // under the surround landing
+    flangePts.push([rSeatPlat - mm2m(1.2), L.yFrameSeat]);  // raised seat platform
+    for (let i = 1; i <= 3; i++) {                          // rounded step down to main face
+      const a = (i / 3) * Math.PI / 2;
+      flangePts.push([
+        rSeatPlat - mm2m(1.2) + mm2m(1.2) * (1 - Math.cos(a)),
+        L.yFrameSeat - mm2m(2.4) + mm2m(1.2) * (1 - Math.sin(a)),
+      ]);
+    }
+    // main face → rounded top-outer corner
+    for (let i = 1; i <= 4; i++) {
       const a = (i / 4) * Math.PI / 2;
-      flangePts.push([rOut - lipR + lipR * Math.sin(a), yT - lipR + lipR * Math.cos(a)]);
+      flangePts.push([rOut - lipR + lipR * Math.sin(a), yMain - lipR + lipR * Math.cos(a)]);
     }
     // outer wall → rounded bottom-outer corner
     for (let i = 0; i <= 4; i++) {
@@ -419,124 +455,176 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   frontFlange.userData.explodedGroup = 'front';
   staticParts.add(frontFlange);
 
-  // countersunk bolt circle: dark recesses sunk into the flange top face —
-  // instantly reads as a real mounting flange instead of a plain ring
+  // countersunk bolt circle sunk into the MAIN face, each hole ringed by a
+  // chamfer collar so it reads as a real machined countersink
   {
     const nBolts = Math.max(4, Math.min(12, Math.round((p.frame as { mountingHoles?: number }).mountingHoles ?? 4)));
-    const rBolt = (L.rSurfOut + L.rFrameOut) / 2 - mm2m(1.5);
-    const rHole = Math.min(mm2m(2.1), (L.rFrameOut - L.rSurfOut) * 0.22);
+    const rBolt = rSeatPlat + (L.rFrameOut - rSeatPlat) * 0.55;
+    const rHole = Math.min(mm2m(2.1), (L.rFrameOut - rSeatPlat) * 0.3);
     if (rHole > mm2m(0.8)) {
       const holeMat = new THREE.MeshStandardMaterial({ color: '#0b0c0e', roughness: 0.92, metalness: 0.2 });
       for (let i = 0; i < nBolts; i++) {
         const ang = (i / nBolts) * Math.PI * 2 + Math.PI / nBolts;
-        const hole = new THREE.Mesh(new THREE.CylinderGeometry(rHole, rHole, mm2m(2), 14), holeMat);
-        hole.position.set(Math.cos(ang) * rBolt, L.yFrameSeat - mm2m(0.7), Math.sin(ang) * rBolt);
+        const hole = new THREE.Mesh(new THREE.CylinderGeometry(rHole, rHole, mm2m(2.4), 14), holeMat);
+        hole.position.set(Math.cos(ang) * rBolt, yMain - mm2m(0.9), Math.sin(ang) * rBolt);
         hole.userData.explodedGroup = 'front';
         staticParts.add(hole);
+        const chamf = new THREE.Mesh(new THREE.TorusGeometry(rHole * 1.22, rHole * 0.4, 8, 16), frameMat);
+        chamf.rotation.x = Math.PI / 2;
+        chamf.position.set(Math.cos(ang) * rBolt, yMain - mm2m(0.22), Math.sin(ang) * rBolt);
+        chamf.userData.explodedGroup = 'front';
+        staticParts.add(chamf);
       }
     }
   }
 
-  // gasket (optional)
+  // gasket (optional) — seated on the main mounting face
   if ((p.frame as { gasket?: boolean }).gasket !== false) {
     const gasket = new THREE.Mesh(
       new THREE.TorusGeometry(L.rFrameOut - mm2m(2.6), mm2m(p.frame.gasketThickness) / 2, 10, seg),
       new THREE.MeshStandardMaterial({ color: '#141414', roughness: 0.95 })
     );
     gasket.rotation.x = Math.PI / 2;
-    gasket.position.y = L.yFrameSeat + mm2m(p.frame.gasketThickness) / 2;
+    gasket.position.y = yMain + mm2m(p.frame.gasketThickness) / 2;
     gasket.userData.explodedGroup = 'front';
     staticParts.add(gasket);
   }
 
   // spider shelf: sits exactly at the spider plane, inner radius == spider
   // outer radius — the spider outer edge rests ON this face (no air gap).
-  // COMPACT ring like a real cast basket: just past the spider OD — it must
-  // NEVER cantilever out to the magnet diameter (floating-plate look + the
-  // leg feet would land mid-air). The legs carry the span to the motor rim.
+  // COMPACT ring like a real cast basket, with a chamfered outer top edge.
   const rShelfOut = Math.max(L.rSpOut + mm2m(7), L.rMagID + mm2m(2));
-  const shelf = lathe([
-    [L.rSpOut, L.yShelfTop],
-    [rShelfOut, L.yShelfTop],
-    [rShelfOut, L.yShelfTop - mm2m(3)],
-    [L.rSpOut, L.yShelfTop - mm2m(3)],
-  ], seg, frameMat);
-  shelf.userData.explodedGroup = 'motor';
-  staticParts.add(shelf);
+  {
+    const chS = Math.min(mm2m(1.4), (rShelfOut - L.rSpOut) * 0.25);
+    const shelf = lathe([
+      [L.rSpOut, L.yShelfTop],                       // spider seat (exact)
+      [rShelfOut - chS, L.yShelfTop],
+      [rShelfOut, L.yShelfTop - chS],                // chamfered outer top edge
+      [rShelfOut, L.yShelfTop - mm2m(3)],
+      [L.rSpOut, L.yShelfTop - mm2m(3)],
+    ], seg, frameMat);
+    shelf.userData.explodedGroup = 'motor';
+    staticParts.add(shelf);
+  }
 
-  // basket legs: extruded CAST RIBS (not boxes) — wide at the flange, waisted
-  // through the window, flared foot, rounded edges from the extrude bevel;
-  // diecast ribs carry a lightening window like a real casting. Two bonded
-  // segments per leg: flange→shelf, shelf→motor rim.
+  // basket legs: ONE continuous CURVED cast strut per leg — a bezier spine
+  // bowing gently outward, waisted through the window, soft rounded-square
+  // cross-section (cast edges), thicker at the flange, slimmer at the foot.
+  // A fillet wedge reinforces each flange joint; a chamfered pad bonds the
+  // foot to the plate/boot rim; a horizontal web carries the shelf ring.
   const nLegs = 8;
   const diecast = (p.frame as { style?: string }).style === 'diecast';
   const legW = diecast ? mm2m(15) : mm2m(9);
   const yLegTop = L.yFrameSeat - flangeW;
-  const rLegTop = L.rFrameOut - mm2m(4);
-  /** Rib plate in the leg plane (local X = tangential width, local Y = along
-   *  the strut) with concave cast waist, extruded across the radial thickness
-   *  with rounded edges. Optional lightening window sized to the local width. */
-  const ribPlate = (len: number, wTop: number, wBot: number, thk: number, window: boolean): THREE.BufferGeometry => {
-    const xT = wTop / 2, xB = wBot / 2;
-    const cX = xB * 0.35;                                   // waist control
-    const s = new THREE.Shape();
-    s.moveTo(-xT, len);
-    s.lineTo(xT, len);
-    s.quadraticCurveTo(cX, len * 0.52, xB, 0);
-    s.lineTo(-xB, 0);
-    s.quadraticCurveTo(-cX, len * 0.52, -xT, len);
-    if (window) {
-      // half-width of the side bezier at the window centre (y = 0.6·len)
-      const t = 1 - 0.6;
-      const xW = (1 - t) * (1 - t) * xT + 2 * (1 - t) * t * cX + t * t * xB;
-      const rH = Math.min(xW * 0.42, len * 0.17);
-      if (rH > mm2m(1.1)) {
-        const h = new THREE.Path();
-        h.absarc(0, len * 0.6, rH, 0, Math.PI * 2);
-        s.holes.push(h);
+  const rLegTop = L.rFrameOut - mm2m(3.5);
+  const castLeg = (
+    a: THREE.Vector3, b: THREE.Vector3, radial: THREE.Vector3, bow: number,
+    wTop: number, wBot: number, thkTop: number, thkBot: number,
+  ): THREE.BufferGeometry => {
+    const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(radial, bow);
+    const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+    const Lseg = 14, Cseg = 10;
+    const pos: number[] = [], idx: number[] = [];
+    const cs: [number, number][] = [];
+    for (let i = 0; i < Cseg; i++) {          // rounded-square cross-section
+      const t = (i / Cseg) * Math.PI * 2 + Math.PI / Cseg;
+      const cu = Math.cos(t), cv = Math.sin(t), q = 0.62;
+      cs.push([Math.sign(cu) * Math.pow(Math.abs(cu), q), Math.sign(cv) * Math.pow(Math.abs(cv), q)]);
+    }
+    const wAt = (s: number) => s < 0.42
+      ? wTop + (wTop * 0.56 - wTop) * Math.pow(s / 0.42, 0.85)
+      : wTop * 0.56 + (wBot - wTop * 0.56) * Math.pow((s - 0.42) / 0.58, 1.35);
+    const tAt = (s: number) => thkTop + (thkBot - thkTop) * Math.pow(s, 0.8);
+    for (let i = 0; i <= Lseg; i++) {
+      const s = i / Lseg;
+      const P = curve.getPoint(s);
+      const T = curve.getTangent(s).normalize();
+      // width dir: radial component ⊥ tangent; thickness dir: tangential
+      let U = radial.clone().addScaledVector(T, -radial.dot(T));
+      if (U.lengthSq() < 1e-8) U = new THREE.Vector3(0, 1, 0);
+      U.normalize();
+      const V = new THREE.Vector3().crossVectors(T, U).normalize();
+      const w2 = wAt(s) / 2, t2 = tAt(s) / 2;
+      for (const [cu, cv] of cs) {
+        pos.push(
+          P.x + U.x * cu * w2 + V.x * cv * t2,
+          P.y + U.y * cu * w2 + V.y * cv * t2,
+          P.z + U.z * cu * w2 + V.z * cv * t2,
+        );
       }
     }
-    const g = new THREE.ExtrudeGeometry(s, {
-      depth: thk, bevelEnabled: true,
-      bevelThickness: Math.min(thk * 0.3, mm2m(1.4)),
-      bevelSize: Math.min(thk * 0.3, mm2m(1.4)),
-      bevelSegments: 2, curveSegments: 12,
-    });
-    g.translate(0, 0, -thk / 2);
+    for (let i = 0; i < Lseg; i++) {
+      for (let j = 0; j < Cseg; j++) {
+        const a0 = i * Cseg + j, b0 = i * Cseg + (j + 1) % Cseg;
+        const c0 = (i + 1) * Cseg + j, d0 = (i + 1) * Cseg + (j + 1) % Cseg;
+        idx.push(a0, c0, b0, b0, c0, d0);
+      }
+    }
+    for (let j = 1; j < Cseg - 1; j++) {       // end caps
+      idx.push(0, j + 1, j);
+      idx.push(Lseg * Cseg, Lseg * Cseg + j, Lseg * Cseg + j + 1);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
     return g;
   };
 
-  const addRib = (
-    aR: number, aY: number, bR: number, bY: number, ang: number,
-    wTop: number, wBot: number, thk: number, window: boolean,
-  ): void => {
-    const a = new THREE.Vector3(Math.cos(ang) * aR, aY, Math.sin(ang) * aR);
-    const b = new THREE.Vector3(Math.cos(ang) * bR, bY, Math.sin(ang) * bR);
-    const len = a.distanceTo(b);
-    const leg = new THREE.Mesh(ribPlate(len, wTop, wBot, thk, window), frameMat);
-    leg.position.copy(a).add(b).multiplyScalar(0.5);
-    const dir = new THREE.Vector3().subVectors(b, a).normalize();
-    leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    leg.userData.explodedGroup = 'frame';
-    staticParts.add(leg);
-  };
-  // Basket: each leg is ONE continuous straight cast strut from the flange
-  // down to the motor rim (exactly like a real cast basket) — no kinked
-  // two-piece legs. The spider shelf ring is carried by horizontal WEBS that
-  // reach out to each leg where it passes the shelf plane.
   const rFootOut = Math.max(L.rBoot - mm2m(4), L.rLegFoot);
   for (let i = 0; i < nLegs; i++) {
     const ang = (i / nLegs) * Math.PI * 2;
     const thk = diecast ? mm2m(7) : mm2m(4.5);
-    // single straight strut: flange → motor rim
-    addRib(rLegTop, yLegTop, rFootOut, L.yLegFoot + mm2m(1), ang, legW, legW * 0.78, thk, diecast);
-    // foot pad — bonds the leg to the plate/boot rim (no floating ends).
-    // Sits ON the seat plane — never sunk into the boot top (z-fight shards).
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.9, mm2m(3), mm2m(8)), frameMat);
-    pad.position.set(Math.cos(ang) * rFootOut, L.yLegFoot + mm2m(2.6), Math.sin(ang) * rFootOut);
+    const radial = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
+    // single curved strut: flange → motor rim, bowing outward like a casting
+    const a = new THREE.Vector3(Math.cos(ang) * rLegTop, yLegTop, Math.sin(ang) * rLegTop);
+    const b = new THREE.Vector3(Math.cos(ang) * rFootOut, L.yLegFoot + mm2m(1.5), Math.sin(ang) * rFootOut);
+    const leg = new THREE.Mesh(
+      castLeg(a, b, radial, Math.min(mm2m(5), a.distanceTo(b) * 0.08), legW, legW * 0.8, thk, thk * 0.78),
+      frameMat,
+    );
+    leg.userData.explodedGroup = 'frame';
+    staticParts.add(leg);
+
+    // cast fillet wedge under the flange (local X = radial outward, Y = up)
+    const gLen = legW * 0.85, gH = Math.max(mm2m(4), flangeW * 0.42);
+    const gs = new THREE.Shape();
+    gs.moveTo(0, mm2m(0.3));
+    gs.lineTo(-gLen, mm2m(0.3));
+    gs.quadraticCurveTo(-gLen * 0.3, -gH * 0.3, 0, -gH);
+    gs.lineTo(0, mm2m(0.3));
+    const gg = new THREE.ExtrudeGeometry(gs, {
+      depth: thk * 0.7, bevelEnabled: true,
+      bevelThickness: thk * 0.1, bevelSize: thk * 0.1, bevelSegments: 1, curveSegments: 8,
+    });
+    gg.translate(0, 0, -thk * 0.35);
+    const gus = new THREE.Mesh(gg, frameMat);
+    gus.position.set(Math.cos(ang) * (rLegTop + mm2m(0.5)), yLegTop - mm2m(0.3), Math.sin(ang) * (rLegTop + mm2m(0.5)));
+    gus.rotation.y = -ang;
+    gus.userData.explodedGroup = 'frame';
+    staticParts.add(gus);
+
+    // chamfered foot pad bonding the leg to the plate/boot rim — sits ON the
+    // seat plane, never sunk into the boot top (no z-fight shards)
+    const pw = legW * 0.95, pd = mm2m(9), pr = Math.min(mm2m(1.6), pd * 0.3);
+    const ps = new THREE.Shape();
+    ps.moveTo(-pw / 2 + pr, -pd / 2);
+    ps.lineTo(pw / 2 - pr, -pd / 2); ps.quadraticCurveTo(pw / 2, -pd / 2, pw / 2, -pd / 2 + pr);
+    ps.lineTo(pw / 2, pd / 2 - pr); ps.quadraticCurveTo(pw / 2, pd / 2, pw / 2 - pr, pd / 2);
+    ps.lineTo(-pw / 2 + pr, pd / 2); ps.quadraticCurveTo(-pw / 2, pd / 2, -pw / 2, pd / 2 - pr);
+    ps.lineTo(-pw / 2, -pd / 2 + pr); ps.quadraticCurveTo(-pw / 2, -pd / 2, -pw / 2 + pr, -pd / 2);
+    const pg = new THREE.ExtrudeGeometry(ps, {
+      depth: mm2m(2.6), bevelEnabled: true,
+      bevelThickness: mm2m(0.6), bevelSize: mm2m(0.6), bevelSegments: 1, curveSegments: 6,
+    });
+    pg.rotateX(-Math.PI / 2);
+    pg.translate(0, mm2m(0.4), 0);
+    const pad = new THREE.Mesh(pg, frameMat);
+    pad.position.set(Math.cos(ang) * rFootOut, L.yLegFoot, Math.sin(ang) * rFootOut);
     pad.rotation.y = -ang;
     pad.userData.explodedGroup = 'frame';
     staticParts.add(pad);
+
     // horizontal web: shelf ring → leg, at the spider plane
     const yWeb = L.yShelfTop - mm2m(1.5);
     const fWeb = Math.max(0, Math.min(1, (yLegTop - yWeb) / Math.max(1e-6, yLegTop - (L.yLegFoot + mm2m(1)))));
@@ -571,11 +659,24 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     block.rotation.y = Math.PI / 2;
     block.userData.explodedGroup = 'frame';
     staticParts.add(block);
+    // chamfer cap on the block top — kills the raw-box look
+    const blockCap = new THREE.Mesh(new THREE.BoxGeometry(mm2m(8.2), mm2m(1.8), thkTerm * 0.82), frameMat);
+    blockCap.position.set(sx * rTerm, yTerm + mm2m(5.3), 0);
+    blockCap.rotation.y = Math.PI / 2;
+    blockCap.userData.explodedGroup = 'frame';
+    staticParts.add(blockCap);
     for (const sz of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.5), mm2m(1.5), mm2m(8), 12), termMat);
-      post.position.set(sx * rTerm, yTerm + mm2m(6.5), sz * mm2m(2.4));
+      // hex posts — reads as real binding hardware, not a smooth pin
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.4), mm2m(1.4), mm2m(8.5), 6), termMat);
+      post.position.set(sx * rTerm, yTerm + mm2m(6.9), sz * mm2m(2.4));
+      post.rotation.y = Math.PI / 6;
       post.userData.explodedGroup = 'frame';
       staticParts.add(post);
+      // gold washer under each post
+      const washer = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(2.2), mm2m(2.2), mm2m(0.8), 14), termMat);
+      washer.position.set(sx * rTerm, yTerm + mm2m(3.1), sz * mm2m(2.4));
+      washer.userData.explodedGroup = 'frame';
+      staticParts.add(washer);
       // colour-coded insulator collar at the post base (+ red / − black)
       const collar = new THREE.Mesh(
         new THREE.TorusGeometry(mm2m(2.5), mm2m(0.95), 10, 20),

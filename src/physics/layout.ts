@@ -120,7 +120,7 @@ export function computeLayout(d: DriverParams): DriverLayout {
   const fT = Math.max(0.1e-3, mm2m(d.coil.formerThickness));
   const rFormerOut = rFormer + fT;
   const wireD = Math.max(0.02e-3, mm2m(d.coil.wireDiameter));
-  const layers = Math.max(1, Math.min(4, Math.round(d.coil.layers)));
+  const layers = Math.max(1, Math.min(8, Math.round(d.coil.layers)));
   const rWindOuter = rFormerOut + layers * wireD;
   const rPole = mm2m(d.magnet.poleDiameter) / 2;
   const gapW = Math.max(mm2m(d.magnet.gapWidth), rWindOuter - rPole + 0.25e-3);
@@ -129,7 +129,9 @@ export function computeLayout(d: DriverParams): DriverLayout {
   const rMagOD = Math.max(mm2m(d.magnet.diameter) / 2, rTopOD);
   const rMagID = Math.min(Math.max(mm2m(d.magnet.innerDiameter) / 2, rPole), rMagOD - 0.5e-3);
   const rBackOD = Math.max(mm2m(d.magnet.backPlateDiameter) / 2, rMagOD);
-  const rFrameOut = rSurfOut + mm2m(6);
+  // flange radial width scales with driver size — a 24" needs more than a
+  // 6 mm lip for the bolt circle to read correctly
+  const rFrameOut = rSurfOut + Math.max(mm2m(6), Math.min(mm2m(11), rSurfOut * 0.075));
   const rSpIn = rFormerOut;                                     // bonded to former
   const rSpOut = Math.max(mm2m(d.spider.outerDiameter) / 2, rSpIn + 5e-3);
 
@@ -138,7 +140,7 @@ export function computeLayout(d: DriverParams): DriverLayout {
   const turns = Math.max(1, Math.round(d.coil.turnsPerLayer));
   const userH = d.coil.windingHeight != null ? mm2m(d.coil.windingHeight) : 0;
   const gapH = Math.max(0.4e-3, mm2m(d.magnet.topPlateThickness));
-  const windHAuto = Math.min(turns * pitch, 200e-3);
+  const windHAuto = Math.min(turns * pitch, 600e-3);
   const windH = Math.max(wireD, userH > 0 ? userH : windHAuto);
   const overhang = (windH - gapH) / 2;                          // >0 overhung
   const XmaxGeo = Math.max(0, overhang);                        // one-way linear (m)
@@ -403,7 +405,7 @@ export function minFormerHeightM(d: DriverParams): number {
  *  roll crest height `rollHeightM`. Bounded so the rock can never visually
  *  tear the assembly: ≤ 22 % of Xmech and ≤ 45 % of the roll crest. */
 export function rockRimCapM(xMechM: number, rollHeightM: number): number {
-  return Math.min(0.22 * Math.max(0, xMechM), 0.45 * Math.max(0, rollHeightM), 0.018);
+  return Math.min(0.22 * Math.max(0, xMechM), 0.45 * Math.max(0, rollHeightM), 0.03);
 }
 
 /** Axial rock lift (m) at radius `rM`, angle `theta` for a tilt of rim

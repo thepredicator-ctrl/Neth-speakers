@@ -57,12 +57,12 @@ export function SpeakerLab() {
           </Section>
 
           <Section title="Quick Dimensions">
-            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={800} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
-            <Param label="Cone depth" value={driver.cone.depth} min={2} max={120} unit="mm" digits={1} onChange={(v) => patchCone({ depth: v })} />
-            <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={200} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
-            <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={30} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />
-            <Param label="Wire Ø" value={driver.coil.wireDiameter} min={0.1} max={1.2} unit="mm" digits={2} onChange={(v) => patchCoil({ wireDiameter: v })} />
-            <Param label="Power handling" value={driver.powerHandlingW} min={1} max={5000} step={5} digits={0} unit="W (cont.)" badge="user" onChange={(v) => patchDriver({ powerHandlingW: v })} hint="Continuous thermal rating — used by the Max SPL thermal limit and the Dashboard thermal gauge" />
+            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
+            <Param label="Cone depth" value={driver.cone.depth} min={2} max={400} unit="mm" digits={1} onChange={(v) => patchCone({ depth: v })} />
+            <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={620} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
+            <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={100} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />
+            <Param label="Wire Ø" value={driver.coil.wireDiameter} min={0.1} max={6} unit="mm" digits={2} onChange={(v) => patchCoil({ wireDiameter: v })} />
+            <Param label="Power handling" value={driver.powerHandlingW} min={1} max={200000} step={5} digits={0} unit="W (cont.)" badge="user" onChange={(v) => patchDriver({ powerHandlingW: v })} hint="Continuous thermal rating — used by the Max SPL thermal limit and the Dashboard thermal gauge" />
           </Section>
 
           <Section title="Status">
