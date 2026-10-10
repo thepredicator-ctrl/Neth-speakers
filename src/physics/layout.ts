@@ -203,10 +203,11 @@ export function computeLayout(d: DriverParams): DriverLayout {
 
   const yShelfTop = ySpider;                                     // spider seated on shelf
   // The flange seat rides PROUD of the cone seat for tall rolls (wide-roll
-  // subwoofer surrounds land above the baffle plane); small rolls keep the
-  // classic flush 1.4 mm step.
+  // subwoofer surrounds land above the baffle plane). The landing sits at
+  // only ~30 % of the crest height — a real half-roll towers over its frame
+  // landing, which is what makes the roll READ as a tall fat donut.
   const rollHeightM = Math.max(0.5e-3, mm2m(d.surround.rollHeight));
-  const yFrameSeat = ySeat + Math.max(1.4e-3, 0.62 * rollHeightM);
+  const yFrameSeat = ySeat + Math.max(1.4e-3, 0.30 * rollHeightM);
   const yFrameRear = yBackBottom + backThk * 0.4;
 
   /* ---- cone centre: flat shoulder + raised dome (attached, no gaps) ---- */
@@ -216,7 +217,7 @@ export function computeLayout(d: DriverParams): DriverLayout {
     rFormerOut + 0.72 * spanOut,
   );
   const rShoulder = Math.min(
-    rCap + Math.max(4e-3, 0.30 * (rConeOut - rCap)),
+    rCap + Math.max(3.5e-3, 0.20 * (rConeOut - rCap)),
     rConeOut - Math.max(3e-3, 0.12 * spanOut),
   );
   // shoulder sits ON the cone body surface line (flush, never floating)
@@ -264,14 +265,26 @@ export function computeLayout(d: DriverParams): DriverLayout {
  * ------------------------------------------------------------------------- */
 
 /**
- * Surround profile: flat inner glue tab on the cone edge, `rolls` arc(s)
- * whose bulge flattens continuously as |x| approaches the roll capability,
- * flat outer landing tab on the frame seat.
- *   inner edge == (rSurfIn, ySeat + x) exactly
- *   outer edge == (rSurfOut, yFrameSeat) exactly
+ * Surround profile — a TRUE half-roll.
+ *
+ * Reading it from the cone outward (single roll):
+ *   1. inner glue tab        — flat, bonded to the cone edge (rides with x)
+ *   2. lift-off trough       — rubber pulls slightly DOWN from the chord
+ *   3. steep roll rise       — near-vertical wall out of the trough
+ *   4. rounded crest         — the full half-torus crown, biased outward;
+ *                              crest height ≈ rollHeight above the cone plane
+ *   5. steep drop            — the roll's outer wall falls to the frame
+ *   6. outer landing tab     — flat, seated on the frame (fixed)
+ *
+ * The crest is shaped with a superellipse-style exponent so the crown is
+ * ROUND (a torus seen in section), not a sine ramp. `squash` continuously
+ * flattens the roll as |x| approaches its capability and leaves ~8 % residue
+ * at the limit (an inverted roll is never perfectly flat in reality).
+ * Endpoints stay EXACT at every excursion: inner edge == (rSurfIn, ySeat+x),
+ * outer edge == (rSurfOut, yFrameSeat); radii are monotone (lathe-safe).
  */
 export function surroundProfile(
-  L: DriverLayout, rollHeightM: number, rollCount: number, x: number, nPerRoll = 18,
+  L: DriverLayout, rollHeightM: number, rollCount: number, x: number, nPerRoll = 22,
 ): [number, number][] {
   const pts: [number, number][] = [];
   const rolls = Math.max(1, Math.round(rollCount));
@@ -279,22 +292,38 @@ export function surroundProfile(
   const y0 = L.ySeat + x;                       // cone edge (moves)
   const y1 = L.yFrameSeat;                      // frame seat (fixed)
   const flat = Math.min(1, Math.abs(x) / Math.max(1e-4, rollHeightM * SURROUND_TRAVEL_FACTOR));
-  // continuous squash: fully free at rest, ~8% residual bulge at the limit
+  // continuous squash: fully free at rest, ~8 % residual bulge at the limit
   const squash = Math.max(0.08, Math.sqrt(Math.max(0, 1 - flat * flat)) - Math.max(0, flat - 0.9) * 1.2);
-  const tabIn = 0.06, tabOut = 0.10;            // glue tabs (fraction of span)
+  const tabIn = 0.07, tabOut = 0.10;            // glue tabs (fraction of span)
   const n1 = 4, n3 = 5;
   for (let i = 0; i <= n1; i++) {               // inner flat tab (bonded to cone)
     const t = (tabIn * i) / n1;
     pts.push([L.rSurfIn + span * t, y0]);
   }
   const nMid = nPerRoll * rolls;
-  for (let i = 0; i <= nMid; i++) {             // roll arc(s)
+  for (let i = 0; i <= nMid; i++) {             // half-roll arc(s)
     const u = i / nMid;
     const t = tabIn + (1 - tabIn - tabOut) * u;
-    const phase = Math.pow(u, 1.18) * rolls * Math.PI;   // crest biased outward
     const r = L.rSurfIn + span * t;
-    const base = y0 + (y1 - y0) * u;
-    pts.push([r, base + rollHeightM * squash * Math.sin(phase)]);
+    // chord from the cone edge to the frame seat
+    const chord = y0 + (y1 - y0) * u;
+    if (rolls === 1) {
+      // ONE half-roll shaped as a SUPERELLIPSE CROWN (a tall half-torus seen
+      // in section): near-VERTICAL inner and outer walls, narrow rounded
+      // crest at 52 % — exactly the "n"-section of a real tall-roll surround.
+      const uc = 0.52;
+      const half = Math.max(uc, 1 - uc);
+      const q = (u - uc) / half;
+      const crown = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(q), 3)), 1 / 2.6);
+      // lift-off trough just after the inner bond (pulls onto the chord)
+      const trough = -0.10 * Math.exp(-Math.pow((u - 0.12) / 0.09, 2));
+      pts.push([r, chord + rollHeightM * squash * (crown + trough)]);
+    } else {
+      // multi-roll: W-ridge profile, each roll a rounded crest
+      const phase = u * rolls * Math.PI;
+      const crown = Math.pow(Math.abs(Math.sin(phase)), 0.85);
+      pts.push([r, chord + rollHeightM * squash * 0.62 * crown]);
+    }
   }
   for (let i = 0; i <= n3; i++) {               // outer flat landing (bonded to seat)
     const r = L.rSurfOut - span * tabOut * (1 - i / n3);

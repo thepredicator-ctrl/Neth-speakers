@@ -85,7 +85,7 @@ export class SpeakerScene {
     // Film-grade response: ACES gives metals and rubber real depth instead of
     // the flat, blown-out look of raw sRGB output.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.18;
+    this.renderer.toneMappingExposure = 1.12;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -95,7 +95,7 @@ export class SpeakerScene {
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const envScene = new RoomEnvironment();
     this.scene.environment = pmrem.fromScene(envScene, 0.04).texture;
-    this.scene.environmentIntensity = 0.95;
+    this.scene.environmentIntensity = 0.5;
     envScene.dispose?.();
     pmrem.dispose();
 
@@ -109,16 +109,22 @@ export class SpeakerScene {
     this.controls.maxDistance = 8;
 
     // lighting — studio style. With the environment map carrying reflections,
-    // the direct lights shape form: warm key, cool fill, brand-orange rim.
-    const key = new THREE.DirectionalLight(0xfff1e0, 2.2);
-    key.position.set(1.4, 2.2, 1.2);
-    const fill = new THREE.DirectionalLight(0x9fb4ff, 0.55);
-    fill.position.set(-1.6, 0.6, -1.2);
-    const rim = new THREE.DirectionalLight(0xff7a1a, 0.8);
+    // the direct lights shape form: warm key high above, cool fill, two rims
+    // (brand-orange below, white behind) so near-black rubber still separates
+    // from the backdrop, and a soft top light that sculpts the roll crest.
+    const key = new THREE.DirectionalLight(0xfff1e0, 1.7);
+    key.position.set(1.3, 2.6, 1.1);
+    const fill = new THREE.DirectionalLight(0x9fb4ff, 0.35);
+    fill.position.set(-1.6, 0.7, -1.2);
+    const rim = new THREE.DirectionalLight(0xff8a3a, 0.4);
     rim.position.set(0.4, -1.4, -1.6);
-    const amb = new THREE.AmbientLight(0x404448, 0.5);
-    const hemi = new THREE.HemisphereLight(0x50565e, 0x0c0d10, 0.55);
-    this.scene.add(key, fill, rim, amb, hemi);
+    const back = new THREE.DirectionalLight(0xe8ecff, 0.5);
+    back.position.set(-0.7, 0.35, -1.9);
+    const top = new THREE.DirectionalLight(0xffffff, 0.3);
+    top.position.set(0.1, 2.4, -0.4);
+    const amb = new THREE.AmbientLight(0x404448, 0.32);
+    const hemi = new THREE.HemisphereLight(0x585f6a, 0x0c0d10, 0.4);
+    this.scene.add(key, fill, rim, back, top, amb, hemi);
 
     // soft contact shadow — grounds the driver so it doesn't float in the void
     this.contactShadow = new THREE.Mesh(
@@ -139,8 +145,8 @@ export class SpeakerScene {
       c.width = c.height = 512;
       const ctx = c.getContext('2d')!;
       const g = ctx.createRadialGradient(256, 256, 24, 256, 256, 256);
-      g.addColorStop(0, '#1b1e26');
-      g.addColorStop(0.42, '#111319');
+      g.addColorStop(0, '#272b34');
+      g.addColorStop(0.42, '#16181e');
       g.addColorStop(1, '#0b0c0f');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 512, 512);

@@ -37,9 +37,9 @@ export const MATERIALS: MaterialDef[] = [
 
   // ---- Spiders ----------------------------------------------------------
   { id: 'spider-cotton', name: 'Impregnated cotton fabric', category: 'spider', density: 600, youngs: 500e6, lossFactor: 0.1,
-    notes: 'Conventional cup spider material.', color: '#8a7a5c', illustrative: true },
+    notes: 'Conventional cup spider material.', color: '#7a6b50', illustrative: true },
   { id: 'spider-nomex', name: 'Nomex® fabric', category: 'spider', density: 450, youngs: 800e6, lossFactor: 0.08,
-    notes: 'Polyamide paper spider, heat resistant.', color: '#9a8468', illustrative: true },
+    notes: 'Polyamide paper spider, heat resistant.', color: '#7d6a4e', illustrative: true },
   { id: 'spider-glass', name: 'Glass-composite spider', category: 'spider', density: 900, youngs: 3e9, lossFactor: 0.06,
     notes: 'Stiff composite spider for high-power subwoofers.', color: '#6a705f', illustrative: true },
 

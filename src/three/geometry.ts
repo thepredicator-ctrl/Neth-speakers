@@ -192,7 +192,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     : new THREE.MeshStandardMaterial({
         color: new THREE.Color(p.cone.color),
         roughness: p.cone.finish === 'satin' ? 0.5 : 0.82, metalness: 0.04,
-        bumpMap: fiberBump ?? null, bumpScale: 2.6e-4,
+        bumpMap: fiberBump ?? null, bumpScale: 9e-4,
         side: THREE.DoubleSide,
       });
   const tuck = mm2m(0.7);
@@ -215,7 +215,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   for (let i = 1; i <= nC; i++) {
     const t = i / nC;
     const r = L.rShoulder + (L.rConeOut - L.rShoulder) * t;
-    let y = L.yShoulder + (L.ySeat - L.yShoulder) * (p.cone.profile === 'curved' ? Math.pow(t, 0.86) : t);
+    let y = L.yShoulder + (L.ySeat - L.yShoulder) * (p.cone.profile === 'curved' ? Math.pow(t, 0.76) : t);
     if (p.cone.profile === 'ribbed') {
       y += Math.sin(t * Math.PI * 7) * mm2m(0.7) * (1 - t * 0.35);
     }
@@ -251,28 +251,34 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     }
   }
 
-  /* ---------- dust dome: flat land + raised dome, seated on the shoulder ---------- */
+  /* ---------- dust dome: flat land + raised dome, seated on the shoulder ----------
+   * The dome profile rises from the rim (seated exactly on the shoulder land)
+   * to a FULL CENTRE PEAK. Tangent-continuous at the rim: no crater, no
+   * pinched tip. 'inverted' is the true mirror: a concave dip with the rim
+   * seated on the land and the centre lowest. */
   const capProfile: [number, number][] = [];
   capProfile.push([L.rShoulder, L.yShoulder]);                 // outer land on the cone shoulder
   capProfile.push([L.rCap, L.yShoulder]);                      // flat annulus
   if (p.cone.dustCapShape === 'inverted') {
-    const nD = 14;
+    const nD = 16;
+    capProfile.push([L.rCap, L.yShoulder - mm2m(0.5)]);        // rim lip rolls under
     for (let i = 1; i <= nD; i++) {
-      const u = i / nD;
+      const u = i / nD;                                        // 0 rim → 1 centre
       const r = L.rCap * (1 - u);
-      const y = L.yShoulder + mm2m(0.6) - L.capH * 0.45 * Math.sqrt(Math.max(0, 1 - Math.pow(u, 2.2)));
+      const y = L.yShoulder - mm2m(0.5) - L.capH * 0.55 * Math.pow(Math.sin((Math.PI / 2) * u), 0.85);
       capProfile.push([Math.max(r, 1e-4), y]);
     }
   } else if (p.cone.dustCapShape === 'flat') {
     capProfile.push([mm2m(2), L.yShoulder + mm2m(1.2)]);
     capProfile.push([1e-4, L.yShoulder + mm2m(1.2)]);
   } else {
-    // raised dome (superellipse — full sides, slightly flattened logo pad)
-    const nD = 18;
+    // raised dome — tangent rise from the rim, round superellipse sides,
+    // slight flattening only right at the apex (logo pad)
+    const nD = 20;
     for (let i = 1; i <= nD; i++) {
-      const u = i / nD;
+      const u = i / nD;                                        // 0 rim → 1 centre
       const r = L.rCap * (1 - u);
-      const y = L.yShoulder + L.capH * Math.sqrt(Math.max(0, 1 - Math.pow(u, 2.2)));
+      const y = L.yShoulder + L.capH * Math.pow(Math.sin((Math.PI / 2) * Math.pow(u, 0.92)), 0.9);
       capProfile.push([Math.max(r, 1e-4), y]);
     }
   }
@@ -284,7 +290,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     : new THREE.MeshStandardMaterial({
         color: new THREE.Color(coneMatDef_color(p)),
         roughness: p.cone.finish === 'satin' ? 0.5 : 0.84, metalness: 0.04,
-        bumpMap: fiberBump ?? null, bumpScale: 2.2e-4,
+        bumpMap: fiberBump ?? null, bumpScale: 7e-4,
         side: THREE.DoubleSide,
       }));
   moving.add(dustCap);
@@ -374,6 +380,18 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     const bootMesh = lathe(bp, seg, bootMat);
     bootMesh.userData.explodedGroup = 'motor';
     staticParts.add(bootMesh);
+    // rolled top rim + clamp bead — a bare cylinder reads as plastic pipe;
+    // the bead and rim make it read as a real rubber motor cover
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(rb - mm2m(0.8), mm2m(1.5), 10, seg), bootMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = L.yBootTop - mm2m(1.2);
+    rim.userData.explodedGroup = 'motor';
+    staticParts.add(rim);
+    const bead = new THREE.Mesh(new THREE.TorusGeometry(rb * 0.72, mm2m(2.2), 10, seg), bootMat);
+    bead.rotation.x = Math.PI / 2;
+    bead.position.y = L.yBootBottom + h * 0.22;
+    bead.userData.explodedGroup = 'motor';
+    staticParts.add(bead);
   }
 
   /* ---------- frame / basket ---------- */
@@ -433,7 +451,10 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
 
   // spider shelf: sits exactly at the spider plane, inner radius == spider
   // outer radius — the spider outer edge rests ON this face (no air gap).
-  const rShelfOut = Math.max(L.rMagOD + mm2m(2), L.rSpOut + mm2m(6));
+  // COMPACT ring like a real cast basket: just past the spider OD — it must
+  // NEVER cantilever out to the magnet diameter (floating-plate look + the
+  // leg feet would land mid-air). The legs carry the span to the motor rim.
+  const rShelfOut = Math.max(L.rSpOut + mm2m(7), L.rMagID + mm2m(2));
   const shelf = lathe([
     [L.rSpOut, L.yShelfTop],
     [rShelfOut, L.yShelfTop],
@@ -452,9 +473,6 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const legW = diecast ? mm2m(15) : mm2m(9);
   const yLegTop = L.yFrameSeat - flangeW;
   const rLegTop = L.rFrameOut - mm2m(4);
-  const rShelfLand = rShelfOut - mm2m(2);
-  const rFoot = L.rLegFoot - mm2m(1.5);
-
   /** Rib plate in the leg plane (local X = tangential width, local Y = along
    *  the strut) with concave cast waist, extruded across the radial thickness
    *  with rounded edges. Optional lightening window sized to the local width. */
@@ -502,47 +520,72 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     leg.userData.explodedGroup = 'frame';
     staticParts.add(leg);
   };
+  // Basket: each leg is ONE continuous straight cast strut from the flange
+  // down to the motor rim (exactly like a real cast basket) — no kinked
+  // two-piece legs. The spider shelf ring is carried by horizontal WEBS that
+  // reach out to each leg where it passes the shelf plane.
+  const rFootOut = Math.max(L.rBoot - mm2m(4), L.rLegFoot);
   for (let i = 0; i < nLegs; i++) {
     const ang = (i / nLegs) * Math.PI * 2;
-    const thk = diecast ? mm2m(5.5) : mm2m(3.5);
-    addRib(rLegTop, yLegTop, rShelfLand, L.yShelfTop - mm2m(0.5), ang, legW, legW * 0.82, thk, diecast);
-    addRib(rShelfLand, L.yShelfTop - mm2m(2.5), rFoot, L.yLegFoot, ang, legW * 0.72, legW * 0.58, thk * 0.9, false);
-    // foot pad — bonds the leg to the plate/boot rim (no floating ends)
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.9, mm2m(3), mm2m(7)), frameMat);
-    pad.position.set(Math.cos(ang) * rFoot, L.yLegFoot + mm2m(0.8), Math.sin(ang) * rFoot);
+    const thk = diecast ? mm2m(7) : mm2m(4.5);
+    // single straight strut: flange → motor rim
+    addRib(rLegTop, yLegTop, rFootOut, L.yLegFoot + mm2m(1), ang, legW, legW * 0.78, thk, diecast);
+    // foot pad — bonds the leg to the plate/boot rim (no floating ends).
+    // Sits ON the seat plane — never sunk into the boot top (z-fight shards).
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.9, mm2m(3), mm2m(8)), frameMat);
+    pad.position.set(Math.cos(ang) * rFootOut, L.yLegFoot + mm2m(2.6), Math.sin(ang) * rFootOut);
     pad.rotation.y = -ang;
     pad.userData.explodedGroup = 'frame';
     staticParts.add(pad);
+    // horizontal web: shelf ring → leg, at the spider plane
+    const yWeb = L.yShelfTop - mm2m(1.5);
+    const fWeb = Math.max(0, Math.min(1, (yLegTop - yWeb) / Math.max(1e-6, yLegTop - (L.yLegFoot + mm2m(1)))));
+    const rLegAtWeb = rLegTop + (rFootOut - rLegTop) * fWeb;
+    const webLen = Math.max(0, rLegAtWeb - rShelfOut + mm2m(2));
+    if (webLen > mm2m(3)) {
+      const web = new THREE.Mesh(new THREE.BoxGeometry(webLen, mm2m(3), legW * 0.8), frameMat);
+      web.position.set(
+        Math.cos(ang) * (rShelfOut - mm2m(1) + webLen / 2),
+        yWeb,
+        Math.sin(ang) * (rShelfOut - mm2m(1) + webLen / 2),
+      );
+      web.rotation.y = -ang;
+      web.userData.explodedGroup = 'frame';
+      staticParts.add(web);
+    }
   }
 
-  // terminals: race-style blocks on the ±X legs between shelf and motor rim,
-  // each with two gold push posts; the tinsel lands here.
+  // terminals: race-style blocks bolted FLUSH onto the ±X legs between the
+  // shelf and the motor rim (sized to the rib so they read as part of the
+  // casting, not floating shards), each with two gold push posts.
   const termMat = new THREE.MeshStandardMaterial({ color: '#c9a227', roughness: 0.35, metalness: 0.85 });
+  const thkTerm = (diecast ? mm2m(7) : mm2m(4.5)) + mm2m(1.5); // block = rib + skin
   const yTerm = (L.yShelfTop + L.yLegFoot) / 2;
-  const fTerm = Math.max(0, Math.min(1, (L.yShelfTop - mm2m(2.5) - yTerm) / Math.max(1e-6, L.yShelfTop - mm2m(2.5) - L.yLegFoot)));
-  const rTerm = rShelfLand + (rFoot - rShelfLand) * fTerm + mm2m(3);
+  const fTerm = Math.max(0, Math.min(1, (yLegTop - yTerm) / Math.max(1e-6, yLegTop - (L.yLegFoot + mm2m(1)))));
+  const rTerm = rLegTop + (rFootOut - rLegTop) * fTerm;
   const termPos: { x: number; y: number; z: number }[] = [];
   for (const sx of [-1, 1]) {
-    const block = new THREE.Mesh(new THREE.BoxGeometry(mm2m(13), mm2m(11), mm2m(11)), frameMat);
+    const ang = sx > 0 ? 0 : Math.PI;
+    const block = new THREE.Mesh(new THREE.BoxGeometry(mm2m(10), mm2m(9), thkTerm), frameMat);
     block.position.set(sx * rTerm, yTerm, 0);
     block.rotation.y = Math.PI / 2;
     block.userData.explodedGroup = 'frame';
     staticParts.add(block);
     for (const sz of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.7), mm2m(1.7), mm2m(9), 12), termMat);
-      post.position.set(sx * rTerm, yTerm + mm2m(7), sz * mm2m(3));
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(mm2m(1.5), mm2m(1.5), mm2m(8), 12), termMat);
+      post.position.set(sx * rTerm, yTerm + mm2m(6.5), sz * mm2m(2.4));
       post.userData.explodedGroup = 'frame';
       staticParts.add(post);
       // colour-coded insulator collar at the post base (+ red / − black)
       const collar = new THREE.Mesh(
-        new THREE.TorusGeometry(mm2m(2.9), mm2m(1.05), 10, 20),
+        new THREE.TorusGeometry(mm2m(2.5), mm2m(0.95), 10, 20),
         new THREE.MeshStandardMaterial({ color: sz > 0 ? '#a33028' : '#101113', roughness: 0.6, metalness: 0.05 }),
       );
       collar.rotation.x = Math.PI / 2;
-      collar.position.set(sx * rTerm, yTerm + mm2m(2.6), sz * mm2m(3));
+      collar.position.set(sx * rTerm, yTerm + mm2m(2.4), sz * mm2m(2.4));
       collar.userData.explodedGroup = 'frame';
       staticParts.add(collar);
-      termPos.push({ x: sx * rTerm, y: yTerm + mm2m(11), z: sz * mm2m(3) });
+      termPos.push({ x: sx * rTerm, y: yTerm + mm2m(10), z: sz * mm2m(2.4) });
     }
   }
 
@@ -551,10 +594,10 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   // Rubber half-roll: physical material with a soft clearcoat so the crest
   // catches a believable sheen instead of rendering as flat black plastic.
   const surroundMat = new THREE.MeshPhysicalMaterial({
-    color: (p.surround as { color?: string }).color ?? surrMatDef?.color ?? '#17181c',
-    roughness: 0.78, metalness: 0.0,
-    clearcoat: 0.42, clearcoatRoughness: 0.55,
-    sheen: 0.25, sheenRoughness: 0.7, sheenColor: new THREE.Color('#3a3d45'),
+    color: (p.surround as { color?: string }).color ?? surrMatDef?.color ?? '#1d2025',
+    roughness: 0.68, metalness: 0.0,
+    clearcoat: 0.42, clearcoatRoughness: 0.5,
+    sheen: 0.28, sheenRoughness: 0.6, sheenColor: new THREE.Color('#424752'),
     side: THREE.DoubleSide,
   });
   const surround = lathe(surroundProfile(L, mm2m(p.surround.rollHeight), p.surround.rollCount, 0), seg, surroundMat);
@@ -580,7 +623,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   // rest-position reference ring (thin, at the surround seat)
   const restRing = new THREE.Mesh(
     new THREE.TorusGeometry(L.rSurfIn + mm2m(0.6), mm2m(0.35), 8, seg),
-    new THREE.MeshBasicMaterial({ color: '#ff7a1a', transparent: true, opacity: 0.55 })
+    new THREE.MeshBasicMaterial({ color: '#ff7a1a', transparent: true, opacity: 0.3 })
   );
   restRing.rotation.x = Math.PI / 2;
   restRing.position.y = L.ySeat;

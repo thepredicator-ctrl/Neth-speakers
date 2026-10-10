@@ -33,7 +33,7 @@ export function defaultDriver(): DriverParams {
       thickness: 1.2,
       stiffness: 520,            // N/m
       damping: 0.55,             // N·s/m
-      color: '#17181c',
+      color: '#1d2025',
     },
     spider: {
       innerDiameter: 50.6,       // bonded to the former outer wall
@@ -197,7 +197,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'High-excursion 12″ subwoofer: tall roll surround, 4-layer coil, big box.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 250; d.cone.effectiveDiameter = 266; d.cone.depth = 42; d.cone.thickness = 1.6;
+      d.cone.outerDiameter = 250; d.cone.effectiveDiameter = 266; d.cone.depth = 52; d.cone.thickness = 1.6;
       d.cone.dustCapDiameter = 80; d.cone.profile = 'curved'; d.cone.materialId = 'polypropylene';
       d.surround.innerDiameter = 250; d.surround.outerDiameter = 286; d.surround.rollHeight = 15; d.surround.rollWidth = 16; d.surround.stiffness = 420; d.surround.damping = 0.8;
       d.spider.innerDiameter = 64.6; d.spider.outerDiameter = 160; d.spider.corrugations = 11; d.spider.corrDepth = 5.5; d.spider.stiffness = 900; d.spider.damping = 1.4; d.spider.materialId = 'spider-nomex';
@@ -287,7 +287,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'Serious 15″ subwoofer: 26 mm roll surround, 3.5″ coil, big ferrite motor.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 340; d.cone.depth = 52; d.cone.thickness = 2.0;
+      d.cone.outerDiameter = 340; d.cone.depth = 70; d.cone.thickness = 2.0;
       d.cone.profile = 'curved'; d.cone.materialId = 'polypropylene'; d.cone.dustCapDiameter = 100;
       d.surround.innerDiameter = 340; d.surround.outerDiameter = 392;
       d.surround.rollHeight = 28; d.surround.rollWidth = 26;
@@ -321,7 +321,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'Competition 18″: 32 mm tall roll, 4″ coil, Xmax ≈ 33 mm one-way, 1500 W.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 400; d.cone.depth = 58; d.cone.thickness = 2.4;
+      d.cone.outerDiameter = 400; d.cone.depth = 82; d.cone.thickness = 2.4;
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1c1e22';
       d.cone.dustCapDiameter = 130; d.cone.dustCapShape = 'dome'; d.cone.mass = 260;
       d.surround.innerDiameter = 400; d.surround.outerDiameter = 460;
@@ -357,7 +357,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'Deck-moving 21″: 40 mm roll, 5″ coil, Xmax ≈ 40 mm one-way, 2500 W.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 480; d.cone.depth = 64; d.cone.thickness = 3.0;
+      d.cone.outerDiameter = 480; d.cone.depth = 95; d.cone.thickness = 3.0;
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1b1d21';
       d.cone.dustCapDiameter = 150; d.cone.dustCapShape = 'dome'; d.cone.mass = 380;
       d.surround.innerDiameter = 480; d.surround.outerDiameter = 552;
@@ -393,7 +393,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'The ceiling of the app: 24″ cone, 48 mm roll surround, 6″ coil, Xmax ≈ 46 mm.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 560; d.cone.depth = 70; d.cone.thickness = 3.2;
+      d.cone.outerDiameter = 560; d.cone.depth = 112; d.cone.thickness = 3.2;
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1a1c20';
       d.cone.dustCapDiameter = 180; d.cone.dustCapShape = 'dome'; d.cone.mass = 520;
       d.surround.innerDiameter = 560; d.surround.outerDiameter = 644;
@@ -429,7 +429,7 @@ export const PRESETS: PresetDef[] = [
     blurb: 'Very low tuning without a long port: 18″ active + 18″ passive radiator.',
     make: (b) => {
       const d = clone(b);
-      d.cone.outerDiameter = 360; d.cone.effectiveDiameter = 382; d.cone.depth = 52; d.cone.thickness = 2.2; d.cone.materialId = 'polypropylene'; d.cone.dustCapDiameter = 110;
+      d.cone.outerDiameter = 360; d.cone.effectiveDiameter = 382; d.cone.depth = 66; d.cone.thickness = 2.2; d.cone.materialId = 'polypropylene'; d.cone.dustCapDiameter = 110;
       d.surround.innerDiameter = 360; d.surround.outerDiameter = 404; d.surround.rollHeight = 18; d.surround.rollWidth = 22; d.surround.stiffness = 350; d.surround.damping = 1.0;
       d.spider.innerDiameter = 79.6; d.spider.outerDiameter = 220; d.spider.corrugations = 12; d.spider.corrDepth = 7; d.spider.stiffness = 750; d.spider.damping = 2.0;
       d.coil.windingDiameter = 80.3; d.coil.formerDiameter = 79.1; d.coil.formerHeight = 60; d.coil.wireDiameter = 0.7; d.coil.layers = 4; d.coil.turnsPerLayer = 44;
