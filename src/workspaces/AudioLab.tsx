@@ -5,6 +5,7 @@ import { engine, type DecodedTrack } from '../audio/engine';
 import { isSafariLike, AUDIO_FILE_ACCEPT } from '../utils/platform';
 import { Section, Btn, Param, Sel, Badge, FileDrop, XBar } from '../components/ui';
 import { useExcursionStats } from '../components/useExcursionStats';
+import { suggestedDriveW } from '../physics/amplifier';
 import { Plot } from '../components/Plot';
 import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
 
@@ -22,6 +23,7 @@ export function AudioLab() {
   const patchAmplifier = useApp((s) => s.patchAmplifier);
   const amp = useApp((s) => s.derived.amp);
   const ts = useApp((s) => s.derived.ts);
+  const driver = useApp((s) => s.driver);
   const snapshot = useApp((s) => s.snapshot);
 
   const [track, setTrack] = useState<DecodedTrack | null>(engine.currentTrack);
@@ -237,15 +239,21 @@ export function AudioLab() {
           </Section>
 
           <Section title="Amplifier & Wiring" right={<Badge kind="est">{amp.nominalImpedanceLabel}</Badge>}>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'voltage', voltageRms: 2.83 })}>2.83 V ref</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: suggestedDriveW(ts, driver.powerHandlingW) })}>Match Xmax</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: Math.max(1, Math.round(driver.powerHandlingW / 2)) })}>½ rated</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: driver.powerHandlingW })}>Rated {driver.powerHandlingW} W</Btn>
+            </div>
             <Sel
               label="Drive mode" value={amplifier.driveMode}
               options={[{ value: 'voltage', label: 'Voltage (RMS)' }, { value: 'power', label: 'Power into load' }]}
               onChange={(v) => patchAmplifier({ driveMode: v as typeof amplifier.driveMode })}
             />
             {amplifier.driveMode === 'voltage' ? (
-              <Param label="Output voltage" value={amplifier.voltageRms} min={0.1} max={150} step={0.1} digits={2} unit="Vrms" badge="user" onChange={(v) => patchAmplifier({ voltageRms: v })} />
+              <Param label="Output voltage" value={amplifier.voltageRms} min={0.1} max={200} step={0.1} digits={2} unit="Vrms" badge="user" onChange={(v) => patchAmplifier({ voltageRms: v })} />
             ) : (
-              <Param label="Output power" value={amplifier.powerW} min={0.1} max={3000} step={1} digits={0} unit="W" badge="user" onChange={(v) => patchAmplifier({ powerW: v })} hint="Power is converted to drive voltage via the ACTUAL load impedance" />
+              <Param label="Output power" value={amplifier.powerW} min={0.1} max={10000} step={1} digits={0} unit="W" badge="user" onChange={(v) => patchAmplifier({ powerW: v })} hint="Power is converted to drive voltage via the ACTUAL load impedance" />
             )}
             <div className="note mono" style={{ margin: '2px 0 8px' }}>
               → {amp.vpeak.toFixed(2)} V peak (±) · P = {amp.estimatedPowerW.toFixed(2)} W RMS / {amp.estimatedPowerPeakW.toFixed(1)} W peak

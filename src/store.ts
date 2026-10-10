@@ -12,7 +12,7 @@ import { computeWinding, type WindingResult } from './physics/winding';
 import { computeMagnet, type MagnetResult } from './physics/magnet';
 import { computeEnclosure } from './physics/freqresp';
 import { buildSystem, wiringInfo, type SystemModel } from './physics/stateSpace';
-import { computeAmp, type AmpResult } from './physics/amplifier';
+import { computeAmp, suggestedDriveW, type AmpResult } from './physics/amplifier';
 import { MATERIALS } from './physics/materials';
 import { engine, type EngineSnapshot } from './audio/engine';
 import { mm2m, L2m3 } from './physics/units';
@@ -51,6 +51,8 @@ interface AppState {
   snapshot: EngineSnapshot;
   workspace: WorkspaceId;
   derived: Derived;
+  /** True once the user edits any drive field — freezes auto drive-sync. */
+  ampTouched: boolean;
 
   /* actions */
   setWorkspace: (w: WorkspaceId) => void;
@@ -123,6 +125,19 @@ function withDefaults<T>(base: T, patch: unknown): T {
 }
 
 export const useApp = create<AppState>((set, get) => {
+  /** Drive level that shows the driver's rated excursion (see suggestedDriveW).
+   *  Applied automatically on every driver change until the user sets drive
+   *  themselves — a fresh/custom build is never left at a 2.83 V reference
+   *  that moves a high-Bl sub a fraction of a millimetre. */
+  const autoAmp = (driver: DriverParams): AmplifierParams | null => {
+    if (get().ampTouched) return null;
+    const ts = computeTS(driver, materialFinder(get().customMaterials));
+    const cur = get().amplifier;
+    const powerW = suggestedDriveW(ts, driver.powerHandlingW);
+    // keep the user's mode/limit choices, only re-target the level
+    return { ...cur, driveMode: 'power', powerW };
+  };
+
   const pushDerived = () => {
     const { driver, enclosure, amplifier, audio, sim } = get();
     const derived = computeDerived(driver, enclosure, amplifier, materialFinder(get().customMaterials));
@@ -154,7 +169,16 @@ export const useApp = create<AppState>((set, get) => {
   return {
     driver: sanitizeDriver(defaultDriver()),
     enclosure: sanitizeEnclosure(defaultEnclosure(), sanitizeDriver(defaultDriver())),
-    amplifier: defaultAmplifier(),
+    // Fresh session: drive the default driver at its excursion-matched level
+    // (suggestedDriveW) — never the 2.83 V measurement reference.
+    amplifier: sanitizeAmplifier({
+      ...defaultAmplifier(),
+      driveMode: 'power',
+      powerW: suggestedDriveW(
+        computeTS(sanitizeDriver(defaultDriver()), materialFinder([])),
+        sanitizeDriver(defaultDriver()).powerHandlingW,
+      ),
+    }),
     audio: defaultAudio(),
     sim: defaultSim(),
     customMaterials: [],
@@ -163,29 +187,43 @@ export const useApp = create<AppState>((set, get) => {
     projects: [],
     snapshot: { x: 0, v: 0, i: 0, limit: false, clip: false, sync: 'idle' },
     workspace: 'dashboard',
+    ampTouched: false,
     derived: computeDerived(defaultDriver(), defaultEnclosure(), defaultAmplifier(), materialFinder([])),
 
     setWorkspace: (w) => set({ workspace: w }),
 
     // Every patch is sanitized + self-balanced: values can bend the design
     // but can never break the model.
-    patchDriver: (patch) => { set({ driver: sanitizeDriver({ ...get().driver, ...patch }) }); pushDerived(); },
-    patchCone: (patch) => {
-      const d = sanitizeDriver({ ...get().driver, cone: { ...get().driver.cone, ...patch } });
-      set({ driver: d });
+    patchDriver: (patch) => {
+      const driver = sanitizeDriver({ ...get().driver, ...patch });
+      const amp = autoAmp(driver);
+      set(amp ? { driver, amplifier: sanitizeAmplifier(amp) } : { driver });
       pushDerived();
     },
-    patchSurround: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, surround: { ...d.surround, ...patch } }) }); pushDerived(); },
-    patchSpider: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, spider: { ...d.spider, ...patch } }) }); pushDerived(); },
-    patchCoil: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, coil: { ...d.coil, ...patch } }) }); pushDerived(); },
-    patchMagnet: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, magnet: { ...d.magnet, ...patch } }) }); pushDerived(); },
-    patchFrame: (patch) => { const d = get().driver; set({ driver: sanitizeDriver({ ...d, frame: { ...d.frame, ...patch } }) }); pushDerived(); },
+    patchCone: (patch) => {
+      const d = sanitizeDriver({ ...get().driver, cone: { ...get().driver.cone, ...patch } });
+      const amp = autoAmp(d);
+      set(amp ? { driver: d, amplifier: sanitizeAmplifier(amp) } : { driver: d });
+      pushDerived();
+    },
+    patchSurround: (patch) => { const d = get().driver; const n = sanitizeDriver({ ...d, surround: { ...d.surround, ...patch } }); const amp = autoAmp(n); set(amp ? { driver: n, amplifier: sanitizeAmplifier(amp) } : { driver: n }); pushDerived(); },
+    patchSpider: (patch) => { const d = get().driver; const n = sanitizeDriver({ ...d, spider: { ...d.spider, ...patch } }); const amp = autoAmp(n); set(amp ? { driver: n, amplifier: sanitizeAmplifier(amp) } : { driver: n }); pushDerived(); },
+    patchCoil: (patch) => { const d = get().driver; const n = sanitizeDriver({ ...d, coil: { ...d.coil, ...patch } }); const amp = autoAmp(n); set(amp ? { driver: n, amplifier: sanitizeAmplifier(amp) } : { driver: n }); pushDerived(); },
+    patchMagnet: (patch) => { const d = get().driver; const n = sanitizeDriver({ ...d, magnet: { ...d.magnet, ...patch } }); const amp = autoAmp(n); set(amp ? { driver: n, amplifier: sanitizeAmplifier(amp) } : { driver: n }); pushDerived(); },
+    patchFrame: (patch) => { const d = get().driver; const n = sanitizeDriver({ ...d, frame: { ...d.frame, ...patch } }); const amp = autoAmp(n); set(amp ? { driver: n, amplifier: sanitizeAmplifier(amp) } : { driver: n }); pushDerived(); },
 
     patchEnclosure: (patch) => { set({ enclosure: sanitizeEnclosure({ ...get().enclosure, ...patch }, get().driver) }); pushDerived(); },
     patchPort: (patch) => { const e = get().enclosure; set({ enclosure: sanitizeEnclosure({ ...e, port: { ...e.port, ...patch } }, get().driver) }); pushDerived(); },
     patchPassive: (patch) => { const e = get().enclosure; set({ enclosure: sanitizeEnclosure({ ...e, passive: { ...e.passive, ...patch } }, get().driver) }); pushDerived(); },
 
-    patchAmplifier: (patch) => { set({ amplifier: sanitizeAmplifier({ ...get().amplifier, ...patch }) }); pushDerived(); },
+    patchAmplifier: (patch) => {
+      const drivesDrive = patch.driveMode !== undefined || patch.voltageRms !== undefined || patch.powerW !== undefined;
+      set({
+        amplifier: sanitizeAmplifier({ ...get().amplifier, ...patch }),
+        ...(drivesDrive ? { ampTouched: true } : null),
+      });
+      pushDerived();
+    },
     patchAudio: (patch) => {
       const audio = sanitizeAudio({ ...get().audio, ...patch });
       set({ audio });
@@ -202,12 +240,16 @@ export const useApp = create<AppState>((set, get) => {
       const { driver, enclosure } = applyPreset(id);
       const preset = PRESETS.find((p) => p.id === id);
       const driverS = sanitizeDriver(driver);
+      // Preset amplifier blocks are explicit design intent → freeze auto-sync.
+      const presetAmp = preset?.amplifier
+        ? sanitizeAmplifier({ ...get().amplifier, ...preset.amplifier })
+        : null;
+      const auto = presetAmp ? null : autoAmp(driverS);
       set({
         driver: driverS,
         enclosure: sanitizeEnclosure({ ...get().enclosure, ...enclosure }, driverS),
-        amplifier: preset?.amplifier
-          ? sanitizeAmplifier({ ...get().amplifier, ...preset.amplifier })
-          : get().amplifier,
+        amplifier: presetAmp ?? (auto ? sanitizeAmplifier(auto) : get().amplifier),
+        ...(presetAmp ? { ampTouched: true } : null),
         projectName: preset ? preset.name : get().projectName,
         currentProjectId: null,
       });
@@ -218,10 +260,17 @@ export const useApp = create<AppState>((set, get) => {
       // Merge over defaults first: projects saved by older builds (or edited
       // JSON) can lack newer fields — every value then gets a safe default.
       const driver = sanitizeDriver(withDefaults(defaultDriver(), rec.driver));
+      // A saved amplifier block is explicit design intent; if the project has
+      // none at all, give it the excursion-matched auto drive.
+      const savedAmp = (rec as { amplifier?: unknown }).amplifier != null;
+      const amp = savedAmp
+        ? sanitizeAmplifier(withDefaults(defaultAmplifier(), rec.amplifier))
+        : sanitizeAmplifier(autoAmp(driver) ?? get().amplifier);
       set({
         driver,
         enclosure: sanitizeEnclosure(withDefaults(defaultEnclosure(), rec.enclosure), driver),
-        amplifier: sanitizeAmplifier(withDefaults(defaultAmplifier(), rec.amplifier)),
+        amplifier: amp,
+        ...(savedAmp ? { ampTouched: true } : null),
         audio: sanitizeAudio(withDefaults(defaultAudio(), rec.audio)),
         sim: sanitizeSim(withDefaults(defaultSim(), rec.sim)),
         projectName: typeof rec.name === 'string' ? rec.name.slice(0, 120) : 'Untitled Design',

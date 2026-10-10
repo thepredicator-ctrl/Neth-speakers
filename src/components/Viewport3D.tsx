@@ -48,6 +48,9 @@ export function Viewport3D(props: {
       showRestRing: true,
     });
     sceneRef.current = scene;
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__nethScene = scene;
+    }
     scene.setVizScale(props.vizScale ?? vizScaleOf(audioRef.current));
     return () => { scene.dispose(); sceneRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

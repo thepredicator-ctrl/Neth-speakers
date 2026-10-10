@@ -4,6 +4,7 @@ import { useApp } from '../store';
 import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
 import { Section, Btn, Param, Sel, Badge, XBar } from '../components/ui';
 import { useExcursionStats } from '../components/useExcursionStats';
+import { suggestedDriveW } from '../physics/amplifier';
 import { engine } from '../audio/engine';
 
 export function Simulator3D() {
@@ -42,11 +43,48 @@ export function Simulator3D() {
 
   const overLimit = Math.abs(live.mm) > ts.Xmax;
   const overMech = Math.abs(live.mm) > ts.Xmech * 0.98;
+  const driver = useApp((s) => s.driver);
+  const xmaxDrive = suggestedDriveW(ts, driver.powerHandlingW);
+  const driveActive = live.mm !== 0;
 
   return (
     <div className="ws no-scroll" style={{ height: '100%' }}>
       <div className="split" style={{ flex: 1 }}>
         <div className="side">
+          <Section title="Drive (amplifier)">
+            <p className="note" style={{ marginTop: 0 }}>
+              Applies to <b>music playback AND test tones</b>. Drive defaults to the level
+              that reaches <b>Xmax at 40 Hz</b> — the excursion this driver was built for.
+            </p>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'voltage', voltageRms: 2.83 })}>2.83 V ref</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: xmaxDrive })}>Match Xmax</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: Math.max(1, Math.round(driver.powerHandlingW / 2)) })}>½ rated</Btn>
+              <Btn small onClick={() => patchAmplifier({ driveMode: 'power', powerW: driver.powerHandlingW })}>Rated {driver.powerHandlingW} W</Btn>
+            </div>
+            {amplifier.driveMode === 'voltage' ? (
+              <Param
+                label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={200} step={0.1} digits={1} unit="Vrms" badge="user"
+                onChange={(v) => patchAmplifier({ driveMode: 'voltage', voltageRms: v })}
+              />
+            ) : (
+              <Param
+                label="Drive power" value={amplifier.powerW} min={0.5} max={10000} step={1} digits={0} unit="W" badge="user"
+                onChange={(v) => patchAmplifier({ driveMode: 'power', powerW: v })}
+              />
+            )}
+            <div className="note mono">
+              → {amp.vpeak.toFixed(1)} V peak (±) · {amp.estimatedPowerW.toFixed(0)} W RMS into {amp.nominalImpedanceLabel}
+              {driveActive ? '' : ' · idle — play a tone or file'}
+            </div>
+            <p className="note">
+              The cone motion comes from the electro-mechanical model driven sample-by-sample by the actual
+              signal — never a canned animation. At 2.83 V (lab reference) a high-Bl subwoofer moves only a
+              fraction of a millimetre — that is real physics, not a bug. Use <b>Match Xmax</b> or <b>Rated</b>
+              to see the travel the driver was designed for.
+            </p>
+          </Section>
+
           <Section title="Camera — free angle">
             <p className="note" style={{ marginTop: 0 }}>
               <b>Drag</b> to orbit to any angle · <b>Scroll / pinch</b> to zoom · <b>Right-drag / two-finger</b> to pan.
@@ -116,22 +154,7 @@ export function Simulator3D() {
               <Btn small ghost onClick={() => { engine.setPlaybackRate(0.15); patchSim({ speed: 0.15 }); }}>Slow-mo 0.15×</Btn>
               <Btn small ghost onClick={() => { engine.setPlaybackRate(1); patchSim({ speed: 1 }); }}>Real-time 1×</Btn>
             </div>
-            {amplifier.driveMode === 'voltage' ? (
-              <Param
-                label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={150} step={0.1} digits={1} unit="Vrms" badge="user"
-                onChange={(v) => patchAmplifier({ driveMode: 'voltage', voltageRms: v })}
-              />
-            ) : (
-              <Param
-                label="Drive power" value={amplifier.powerW} min={1} max={3000} step={1} digits={0} unit="W" badge="user"
-                onChange={(v) => patchAmplifier({ driveMode: 'power', powerW: v })}
-              />
-            )}
-            <div className="note mono">→ {amp.vpeak.toFixed(1)} V peak (±) · {amp.estimatedPowerW.toFixed(0)} W RMS into {amp.nominalImpedanceLabel} · tone −3 dBFS → ±{(amp.vpeak * 0.708).toFixed(1)} V</div>
-            <p className="note">
-              The cone motion comes from the electro-mechanical model driven sample-by-sample by the actual signal —
-              never a canned animation. Raise the drive to see the excursion the driver was built for.
-            </p>
+            <div className="note mono">tone −3 dBFS → ±{(amp.vpeak * 0.708).toFixed(1)} V at the coil</div>
           </Section>
 
           <Section title="Playback Speed">

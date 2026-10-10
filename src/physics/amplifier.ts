@@ -39,6 +39,30 @@ export function computeAmp(amp: AmplifierParams, ts: TSParams, w: WiringInfo): A
   };
 }
 
+/**
+ * Suggested DEFAULT drive (W RMS): the power that brings a −3 dBFS 40 Hz tone
+ * to one-way Xmax (free-air approximation, mass/suspension-dominated Zm),
+ * capped at the driver's continuous thermal rating.
+ *
+ * Rationale: a measurement reference (2.83 V) moves a high-Bl subwoofer a
+ * fraction of a millimetre — physically correct, useless as a listening
+ * default. This suggestion always lands the demo tone at the driver's rated
+ * excursion, so the physical view shows the travel the driver was BUILT for
+ * (typical bass-test-tone use). Music averages well below peak, so playback
+ * sits in the linear region with peaks touching Xmax.
+ */
+export function suggestedDriveW(ts: TSParams, powerHandlingW: number): number {
+  const w = 2 * Math.PI * 40;                       // rad/s at 40 Hz
+  const zm = Math.sqrt(
+    Math.pow(ts.Kms - ts.Mms * w * w, 2) + Math.pow(ts.Rms * w, 2),
+  );                                                 // N·s/m (mech impedance)
+  const xmaxM = Math.max(1e-4, ts.Xmax * 1e-3);      // m one-way
+  // x = Bl·I/Zm  →  Vpk = x·Zm·Re/Bl  →  P = (Vpk/√2)²/Re
+  const watts = (xmaxM * xmaxM * zm * zm * ts.Re) / (2 * ts.Bl * ts.Bl);
+  const rated = Math.max(1, powerHandlingW);
+  return Math.round(Math.min(rated, Math.max(0.5, watts)) * 100) / 100;
+}
+
 export function impedanceLabel(z: number): string {
   // nearest standard nominal label
   const std = [1, 2, 2.7, 3, 4, 5.3, 6, 8, 12, 16, 32];
