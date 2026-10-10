@@ -97,7 +97,7 @@ export function driveForXmaxW(
   const vpeak = vpkTone / 0.7079;                         // amplifier vpeak
   const powerW = (vpeak * vpeak) / (2 * load);            // W into nominal load
   return {
-    powerW: Math.min(150000, Math.max(0.05, powerW)),
+    powerW: Math.min(100000000, Math.max(0.05, powerW)),
     vpeakNeeded: vpeak,
     excursionPerVoltM: mag,
   };

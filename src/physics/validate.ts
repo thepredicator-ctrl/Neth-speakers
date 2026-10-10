@@ -399,15 +399,19 @@ export function sanitizeAmplifier(a: AmplifierParams): AmplifierParams {
   // motional/back-EMF impedance Bl²/Zm self-limits current). Short bass-test
   // bursts at 10–100 kW equivalents are exactly how excursion is demonstrated;
   // clamping here silently amputated the "physical mm" for long-throw drivers.
-  const vRms = num(a.voltageRms, 0.05, 2000, 2.83);
-  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 3000, 14), vRms) : num(a.clipVoltageRms, 0.1, 3000, 14);
+  // NO-LIMIT drive: ceilings are deliberately astronomic (100 kV / 100 MW /
+  // 100 kA) so any crazy build can be driven as hard as the user wants. The
+  // cone's own Xmech stop is the only real limit — the model clamps travel
+  // there, so insane drive degrades gracefully instead of exploding.
+  const vRms = num(a.voltageRms, 0.05, 100000, 2.83);
+  const clip = a.clipEnabled ? Math.max(num(a.clipVoltageRms, 0.1, 100000, 14), vRms) : num(a.clipVoltageRms, 0.1, 100000, 14);
   return {
     driveMode: str(a.driveMode, ['voltage', 'power'] as const, 'voltage'),
     voltageRms: vRms,
-    powerW: num(a.powerW, 0.01, 1000000, 25),
+    powerW: num(a.powerW, 0.01, 100000000, 25),
     clipEnabled: a.clipEnabled === true,
     clipVoltageRms: clip,
-    currentLimitA: num(a.currentLimitA, 0, 5000, 0),
+    currentLimitA: num(a.currentLimitA, 0, 100000, 0),
     outputImpedance: num(a.outputImpedance, 0, 8, 0.05),
     bridged: a.bridged === true,
   };

@@ -85,12 +85,12 @@ export function Simulator3D() {
                 </div>
                 {amplifier.driveMode === 'voltage' ? (
                   <Param
-                    label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={2000} step={0.1} digits={1} unit="Vrms" badge="user"
+                    label="Drive voltage" value={amplifier.voltageRms} min={0.1} max={100000} step={0.1} digits={1} unit="Vrms" badge="user"
                     onChange={(v) => patchAmplifier({ driveMode: 'voltage', voltageRms: v })}
                   />
                 ) : (
                   <Param
-                    label="Drive power" value={amplifier.powerW} min={0.5} max={1000000} step={1} digits={0} unit="W" badge="user"
+                    label="Drive power" value={amplifier.powerW} min={0.5} max={100000000} step={1} digits={0} unit="W" badge="user"
                     onChange={(v) => patchAmplifier({ driveMode: 'power', powerW: v })}
                   />
                 )}

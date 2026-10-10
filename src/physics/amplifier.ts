@@ -76,7 +76,7 @@ export function suggestedDriveW(ts: TSParams, powerHandlingW: number): number {
   // NOT capped at rated: for real subwoofers reaching Xmax at 40 Hz takes burst
   // power beyond the continuous rating — that is honest physics. Callers may
   // display a "burst" hint and cap for their own policy.
-  return Math.round(Math.min(150000, Math.max(0.5, watts)) * 100) / 100;
+  return Math.round(Math.min(100000000, Math.max(0.5, watts)) * 100) / 100;
 }
 
 export function impedanceLabel(z: number): string {
