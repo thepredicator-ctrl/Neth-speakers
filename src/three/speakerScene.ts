@@ -55,9 +55,10 @@ export class SpeakerScene {
   private vizSmooth = 0;
   private frameTimes: number[] = [];
   private contactShadow: THREE.Mesh;
+  private studioFloor: THREE.Mesh;
   fps = 0;
 
-  /* --- flexible-body drive estimator (cone breakup / surround waves) --- */
+  /* --- flexible-body drive estimator (cone breakup / surround waves / rock) --- */
   private lastFrameT = 0;
   private lastPhysX = 0;
   private envV = 0;               // |velocity| envelope (m/s)
@@ -66,6 +67,9 @@ export class SpeakerScene {
   private fEst = 24;              // estimated dominant frequency (Hz)
   private xHistT: number[] = [];  // zero-crossing ring (time, s)
   private xHistX: number[] = [];
+  private tilt01 = 0;             // rocking-mode intensity 0..1
+  private tiltAxis = 0;           // precessing tilt axis (rad)
+  private flexGain = 1;           // user gain on flex/rock intensity
 
   constructor(container: HTMLElement, mats: (id: string) => MaterialDef | undefined, opts: SceneOptions) {
     this.container = container;
@@ -91,6 +95,7 @@ export class SpeakerScene {
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     const envScene = new RoomEnvironment();
     this.scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    this.scene.environmentIntensity = 0.95;
     envScene.dispose?.();
     pmrem.dispose();
 
@@ -127,6 +132,45 @@ export class SpeakerScene {
     this.contactShadow.renderOrder = -1;
     this.scene.add(this.contactShadow);
 
+    // studio floor — a huge softly-fading disc with faint machinist rings so
+    // the driver reads as standing in a photo studio, not in a void
+    const floorTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const ctx = c.getContext('2d')!;
+      const g = ctx.createRadialGradient(256, 256, 24, 256, 256, 256);
+      g.addColorStop(0, '#1b1e26');
+      g.addColorStop(0.42, '#111319');
+      g.addColorStop(1, '#0b0c0f');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.strokeStyle = 'rgba(120,130,150,0.10)';
+      for (const rr of [86, 128, 176]) {
+        ctx.beginPath();
+        ctx.arc(256, 256, rr, 0, Math.PI * 2);
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(120,130,150,0.05)';
+      for (const rr of [46, 220, 248]) {
+        ctx.beginPath();
+        ctx.arc(256, 256, rr, 0, Math.PI * 2);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+      return new THREE.CanvasTexture(c);
+    })();
+    // author the canvas in sRGB — without this the dark gradient renders
+    // gamma-lifted and washes the whole viewport grey
+    floorTex.colorSpace = THREE.SRGBColorSpace;
+    this.studioFloor = new THREE.Mesh(
+      new THREE.CircleGeometry(9, 56),
+      new THREE.MeshBasicMaterial({ map: floorTex, depthWrite: false }),
+    );
+    this.studioFloor.rotation.x = -Math.PI / 2;
+    this.studioFloor.renderOrder = -2;
+    this.scene.add(this.studioFloor);
+
     this.resize();
     this.loop();
     window.addEventListener('resize', this.resize);
@@ -153,6 +197,7 @@ export class SpeakerScene {
     this.contactShadow.scale.set(r * 4.6, r * 4.6, 1);
     this.contactShadow.position.y = -h - r * 0.06;
     (this.contactShadow.material as THREE.MeshBasicMaterial).opacity = 0.5;
+    if (this.studioFloor) this.studioFloor.position.y = -h - r * 0.062;
   }
 
   setEnclosure(enc: EnclosureParams | null, driver: DriverParams): void {
@@ -200,6 +245,7 @@ export class SpeakerScene {
 
   setVizScale(s: number): void { this.vizScale = s; }
   setSmoothing(a: number): void { this.vizSmooth = Math.max(0, Math.min(0.95, a)); }
+  setFlexGain(g: number): void { this.flexGain = Math.max(0, Math.min(2, g)); }
   setShowRestRing(v: boolean): void { this.showRestRing = v; if (this.driver) this.driver.restRing.visible = v; }
   setRunning(v: boolean): void { this.running = v; }
 
@@ -254,8 +300,11 @@ export class SpeakerScene {
    * Estimate the flexible-body drive state from the PHYSICAL displacement
    * signal itself (never the enhanced-viz multiplier): envelope-followed
    * velocity + excursion give the intensity, zero-crossings over a sliding
-   * window give the dominant frequency. Everything decays to rest smoothly
-   * when the audio stops, so a parked cone never ripples.
+   * window give the dominant frequency. The rocking (tilt) mode grows with
+   * deep excursion — suspension asymmetry shows up when the coil leaves the
+   * gap — and its axis precesses slowly so one side of the cone leads the
+   * stroke, then the other. Everything decays to rest smoothly when the
+   * audio stops, so a parked cone never ripples or tilts.
    */
   private estimateDrive(xPhys: number, limits: { up: number; down: number } | null, dt: number): DriveState {
     const t = performance.now() / 1000;
@@ -287,7 +336,21 @@ export class SpeakerScene {
     const motionGate = Math.min(1, this.envV / 0.15);
     const target = motionGate * Math.min(1.15, 0.5 * iExc + 0.55 * iV);
     this.wave01 += (target - this.wave01) * (target > this.wave01 ? 0.25 : Math.min(1, dt * 3));
-    return { amp01: this.wave01, fHz: this.fEst, t };
+    // rocking mode: needs DEEP excursion (past ~35 % of the travel) — that is
+    // when real suspensions start rocking. Attack quick, release slow.
+    const tiltTarget = motionGate * Math.pow(Math.max(0, Math.min(1, 1.35 * iExc - 0.35)), 1.5);
+    this.tilt01 += (tiltTarget - this.tilt01) * (tiltTarget > this.tilt01 ? Math.min(1, dt * 5) : Math.min(1, dt * 0.9));
+    if (this.tilt01 > 0.02) {
+      // precess the tilt axis — which side leads keeps drifting
+      this.tiltAxis += dt * (0.35 + 0.5 * Math.min(1, this.fEst / 45));
+    }
+    return {
+      amp01: Math.min(1.15, this.wave01 * this.flexGain),
+      fHz: this.fEst,
+      t,
+      tilt01: Math.min(1.15, this.tilt01 * this.flexGain),
+      tiltAxis: this.tiltAxis,
+    };
   }
 
   private loop = (): void => {
@@ -343,6 +406,8 @@ export class SpeakerScene {
     this.enclosure?.dispose();
     this.contactShadow?.geometry.dispose();
     (this.contactShadow?.material as THREE.Material | undefined)?.dispose();
+    this.studioFloor?.geometry.dispose();
+    (this.studioFloor?.material as THREE.Material | undefined)?.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);

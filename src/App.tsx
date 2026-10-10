@@ -45,6 +45,8 @@ export function App() {
   const snapshot = useApp((s) => s.snapshot);
   const ts = useApp((s) => s.derived.ts);
   const sim = useApp((s) => s.sim);
+  const vizMode = useApp((s) => s.audio.vizMode);
+  const vizMultiplier = useApp((s) => s.audio.vizMultiplier);
   useSnapshotPush();
 
   const [hud, setHud] = useState({ mm: 0 });
@@ -90,8 +92,11 @@ export function App() {
           aria-label="Design name"
         />
         <div className="top-actions">
-          <span className="note mono">
-            {audioOn ? '' : ''}
+          {audioOn ? (
+            <span className="chip chip-live" title="Audio engine running">● LIVE</span>
+          ) : null}
+          <span className="chip chip-mode" title="Displacement display mode">
+            {vizMode === 'enhanced' ? `VIS ×${vizMultiplier}` : 'VIS ×1'}
           </span>
         </div>
       </header>

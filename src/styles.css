@@ -70,6 +70,17 @@ body {
 }
 .project-name:focus { outline: none; border-color: var(--accDim); }
 .top-actions { display: flex; gap: 8px; align-items: center; }
+.chip {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  border: 1px solid var(--line2); border-radius: 999px; padding: 3px 9px; color: var(--txt3);
+  white-space: nowrap; user-select: none;
+}
+.chip-live {
+  color: var(--green); border-color: rgba(79, 208, 122, 0.4); background: rgba(79, 208, 122, 0.07);
+  animation: livePulse 2.2s ease-in-out infinite;
+}
+@keyframes livePulse { 0%, 100% { box-shadow: 0 0 4px rgba(79, 208, 122, 0.25); } 50% { box-shadow: 0 0 10px rgba(79, 208, 122, 0.55); } }
+.chip-mode { color: var(--cyan); border-color: rgba(53, 200, 220, 0.3); }
 
 .main { display: flex; flex: 1; min-height: 0; }
 .rail {
@@ -210,10 +221,36 @@ table.data tr:hover td { background: rgba(255, 255, 255, 0.02); }
 .split > .side { width: 320px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .split > .main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 
+/* side panel tab strip (3D Simulator) */
+.side-tabs {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r2);
+  padding: 4px; flex-shrink: 0; position: sticky; top: 0; z-index: 5;
+}
+.side-tabs button {
+  background: transparent; border: 1px solid transparent; color: var(--txt3);
+  padding: 7px 4px; border-radius: var(--r); cursor: pointer; font-size: 12px; font-weight: 500;
+  transition: all 0.14s ease;
+}
+.side-tabs button:hover { color: var(--txt2); }
+.side-tabs button.active {
+  color: var(--acc); border-color: rgba(255, 122, 26, 0.3); background: rgba(255, 122, 26, 0.08);
+}
+
+/* compact key-value stat rows */
+.stat-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.stat-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r);
+  font-size: 12px; color: var(--txt2);
+}
+.stat-row b { font-family: var(--mono); color: var(--txt); font-weight: 600; }
+
 .viewport {
   position: relative; flex: 1; min-height: 380px; border-radius: var(--r2);
   border: 1px solid var(--line); overflow: hidden; background:
     radial-gradient(ellipse at 50% 30%, #171a21 0%, #0b0c0f 75%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
 }
 .viewport canvas { display: block; width: 100%; height: 100%; }
 .viewport .vp-overlay {

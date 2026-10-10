@@ -190,6 +190,8 @@ export interface SimSettings {
   quality: 'precision' | 'balanced' | 'fast';
   /** Display-only exponential smoothing of rendered displacement (0 = none). */
   vizSmoothing: number;
+  /** User gain on the flexible-body visualisation (cone breakup waves + rock). 1 = physical. */
+  flexGain: number;
 }
 
 /** Completely computed Thiele–Small parameter set (SI units). */

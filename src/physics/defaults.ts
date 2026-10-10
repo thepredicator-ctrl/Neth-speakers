@@ -156,7 +156,7 @@ export function defaultAudio(): AudioSettings {
 }
 
 export function defaultSim(): SimSettings {
-  return { mode: 'dynamic', speed: 1, running: true, paused: false, quality: 'precision', vizSmoothing: 0.35 };
+  return { mode: 'dynamic', speed: 1, running: true, paused: false, quality: 'precision', vizSmoothing: 0.35, flexGain: 1 };
 }
 
 /* ---------------------------------------------------------------------------
@@ -253,7 +253,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.dustCapDiameter = 112; d.cone.dustCapShape = 'dome'; d.cone.dustCapMass = 30;
       d.cone.mass = 170;           // g — composite cone + glass roving
       d.surround.innerDiameter = 240; d.surround.outerDiameter = 280;
-      d.surround.rollHeight = 25; d.surround.rollWidth = 20;
+      d.surround.rollHeight = 40; d.surround.rollWidth = 20;   // crest ≈ 1.3 × Xmax (fat SPL roll)
       d.surround.stiffness = 2750; d.surround.damping = 1.5; d.surround.materialId = 'rubber-nbr';
       d.spider.innerDiameter = 72.5; d.spider.outerDiameter = 172;
       d.spider.corrugations = 12; d.spider.corrDepth = 7.5;
@@ -290,7 +290,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.outerDiameter = 340; d.cone.depth = 52; d.cone.thickness = 2.0;
       d.cone.profile = 'curved'; d.cone.materialId = 'polypropylene'; d.cone.dustCapDiameter = 100;
       d.surround.innerDiameter = 340; d.surround.outerDiameter = 392;
-      d.surround.rollHeight = 26; d.surround.rollWidth = 26;
+      d.surround.rollHeight = 28; d.surround.rollWidth = 26;
       d.surround.stiffness = 500; d.surround.damping = 0.9; d.surround.materialId = 'rubber-butyl';
       d.spider.innerDiameter = 90.1; d.spider.outerDiameter = 230;
       d.spider.corrugations = 12; d.spider.corrDepth = 7;
@@ -325,7 +325,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1c1e22';
       d.cone.dustCapDiameter = 130; d.cone.dustCapShape = 'dome'; d.cone.mass = 260;
       d.surround.innerDiameter = 400; d.surround.outerDiameter = 460;
-      d.surround.rollHeight = 32; d.surround.rollWidth = 30;
+      d.surround.rollHeight = 45; d.surround.rollWidth = 30;
       d.surround.stiffness = 1400; d.surround.damping = 1.4; d.surround.materialId = 'rubber-nbr';
       d.spider.innerDiameter = 100.1; d.spider.outerDiameter = 252;
       d.spider.corrugations = 13; d.spider.corrDepth = 8;
@@ -361,7 +361,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1b1d21';
       d.cone.dustCapDiameter = 150; d.cone.dustCapShape = 'dome'; d.cone.mass = 380;
       d.surround.innerDiameter = 480; d.surround.outerDiameter = 552;
-      d.surround.rollHeight = 40; d.surround.rollWidth = 36;
+      d.surround.rollHeight = 53; d.surround.rollWidth = 36;
       d.surround.stiffness = 1800; d.surround.damping = 1.6; d.surround.materialId = 'rubber-nbr';
       d.spider.innerDiameter = 125.1; d.spider.outerDiameter = 292;
       d.spider.corrugations = 14; d.spider.corrDepth = 9;
@@ -397,7 +397,7 @@ export const PRESETS: PresetDef[] = [
       d.cone.profile = 'straight'; d.cone.materialId = 'paper'; d.cone.color = '#1a1c20';
       d.cone.dustCapDiameter = 180; d.cone.dustCapShape = 'dome'; d.cone.mass = 520;
       d.surround.innerDiameter = 560; d.surround.outerDiameter = 644;
-      d.surround.rollHeight = 48; d.surround.rollWidth = 42;
+      d.surround.rollHeight = 60; d.surround.rollWidth = 42;
       d.surround.stiffness = 2200; d.surround.damping = 1.8; d.surround.materialId = 'rubber-nbr';
       d.spider.innerDiameter = 155.1; d.spider.outerDiameter = 322;
       d.spider.corrugations = 15; d.spider.corrDepth = 10;

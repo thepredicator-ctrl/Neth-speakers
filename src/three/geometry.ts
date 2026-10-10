@@ -30,6 +30,7 @@ import { mm2m } from '../physics/units';
 import {
   computeLayout, surroundProfile, spiderProfile,
   surroundWrinkleAmp, surroundWrinkleCount,
+  rockLiftY, rockRimCapM, rockBeat,
   type DriverLayout,
 } from '../physics/layout';
 
@@ -48,17 +49,22 @@ export interface DriverGeometry {
 }
 
 /**
- * Live drive state for the flexible-body visualisation (cone breakup waves
- * + surround travelling waves). `amp01` is a normalised motion intensity
- * (0 = at rest / idle, 1 = solidly driven), `fHz` the estimated dominant
- * frequency of the displacement signal, `t` the wall-clock time (s).
- * Both wave amplitudes scale with the PHYSICAL signal — the enhanced-viz
+ * Live drive state for the flexible-body visualisation (cone breakup waves,
+ * surround travelling waves AND the rocking/tilt mode). `amp01` is a
+ * normalised motion intensity (0 = at rest / idle, 1 = solidly driven),
+ * `fHz` the estimated dominant frequency of the displacement signal, `t`
+ * the wall-clock time (s). `tilt01` is the rocking intensity — one side of
+ * the cone leads the stroke while the other lags — and `tiltAxis` is the
+ * slowly precessing tilt axis, so which side leads keeps changing. All
+ * wave/rock amplitudes scale with the PHYSICAL signal — the enhanced-viz
  * multiplier never inflates them.
  */
 export interface DriveState {
   amp01: number;
   fHz: number;
   t: number;
+  tilt01: number;
+  tiltAxis: number;
 }
 
 const lathe = (pts: [number, number][], segments: number, material: THREE.Material): THREE.Mesh => {
@@ -101,6 +107,41 @@ function windingTexture(copper: string): THREE.CanvasTexture {
   return t;
 }
 
+/** Procedural paper/fibre bump map — speckle + long stray fibres, like a
+ *  real pressed-pulp cone surface. Adds tactile grain under studio light. */
+function fiberBumpTexture(): THREE.CanvasTexture {
+  const s = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = s;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, s, s);
+  // fine pulp speckle
+  const img = ctx.getImageData(0, 0, s, s);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 46;
+    img.data[i] = Math.max(0, Math.min(255, 128 + n));
+    img.data[i + 1] = img.data[i];
+    img.data[i + 2] = img.data[i];
+  }
+  ctx.putImageData(img, 0, 0);
+  // long stray fibres catching the light
+  ctx.strokeStyle = 'rgba(160,160,160,0.5)';
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < 90; i++) {
+    const x = Math.random() * s, y = Math.random() * s;
+    const a = Math.random() * Math.PI * 2, l = 6 + Math.random() * 22;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + Math.cos(a + 0.3) * l * 0.5, y + Math.sin(a + 0.3) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l);
+    ctx.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(8, 8);
+  return t;
+}
+
 export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef | undefined, quality: 'low' | 'med' | 'high'): DriverGeometry {
   const seg = quality === 'low' ? 40 : quality === 'high' ? 96 : 64;
   const L: DriverLayout = computeLayout(p);
@@ -140,7 +181,20 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   // Profile (r, y), centre→out. The body runs from the shoulder corner to the
   // surround seat; the neck blends the shoulder region down to the former top
   // so the bond is a visible, continuous surface (nothing floats).
-  const coneMatMesh = surf(p.cone.color, p.cone.finish, 0.04);
+  // Matte/satin cones get a procedural pulp-fibre bump map; gloss cones get a
+  // physical clearcoat (painted / glassed builds).
+  const fiberBump = p.cone.finish === 'gloss' ? null : fiberBumpTexture();
+  const coneMatMesh = p.cone.finish === 'gloss'
+    ? new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(p.cone.color), roughness: 0.24, metalness: 0.05,
+        clearcoat: 0.9, clearcoatRoughness: 0.22, side: THREE.DoubleSide,
+      })
+    : new THREE.MeshStandardMaterial({
+        color: new THREE.Color(p.cone.color),
+        roughness: p.cone.finish === 'satin' ? 0.5 : 0.82, metalness: 0.04,
+        bumpMap: fiberBump ?? null, bumpScale: 2.6e-4,
+        side: THREE.DoubleSide,
+      });
   const tuck = mm2m(0.7);
   const coneProfile: [number, number][] = [];
   coneProfile.push([Math.max(1e-4, L.rConeIn - tuck), L.yConeInner - tuck]); // glue tuck behind former wall
@@ -196,7 +250,6 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       coneW[i] = u > 0 && u < 1 ? Math.pow(Math.sin(Math.PI * u), 1.15) : 0;
     }
   }
-  let coneWaveActive = false;
 
   /* ---------- dust dome: flat land + raised dome, seated on the shoulder ---------- */
   const capProfile: [number, number][] = [];
@@ -223,7 +276,17 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       capProfile.push([Math.max(r, 1e-4), y]);
     }
   }
-  const dustCap = lathe(capProfile, seg, surf(coneMatDef_color(p), p.cone.finish === 'gloss' ? 'satin' : 'matte', 0.05));
+  const dustCap = lathe(capProfile, seg, p.cone.finish === 'gloss'
+    ? new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color(coneMatDef_color(p)), roughness: 0.24, metalness: 0.05,
+        clearcoat: 0.9, clearcoatRoughness: 0.22, side: THREE.DoubleSide,
+      })
+    : new THREE.MeshStandardMaterial({
+        color: new THREE.Color(coneMatDef_color(p)),
+        roughness: p.cone.finish === 'satin' ? 0.5 : 0.84, metalness: 0.04,
+        bumpMap: fiberBump ?? null, bumpScale: 2.2e-4,
+        side: THREE.DoubleSide,
+      }));
   moving.add(dustCap);
 
   /* ---------- voice coil: former + winding straddling the gap ---------- */
@@ -239,6 +302,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   // winding centred on the magnetic gap (+ coil.position toward the front);
   // every layer sits ON the former, stacked outward by one wire diameter.
   const yWindC = L.yWindC;
+  const windMeshes: THREE.Mesh[] = [];
   for (let k = 0; k < layers; k++) {
     const rMid = L.rFormerOut + wireR + k * mm2m(p.coil.wireDiameter);
     const cyl = new THREE.Mesh(
@@ -247,6 +311,7 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     );
     cyl.position.y = yWindC;
     moving.add(cyl);
+    windMeshes.push(cyl);
   }
 
   /* ---------- magnet assembly (gap centre == winding centre) ---------- */
@@ -483,9 +548,14 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
 
   /* ---------- deformables (profiles from layout.ts) ---------- */
   const surrMatDef = mats(p.surround.materialId);
-  const surroundMat = new THREE.MeshStandardMaterial({
+  // Rubber half-roll: physical material with a soft clearcoat so the crest
+  // catches a believable sheen instead of rendering as flat black plastic.
+  const surroundMat = new THREE.MeshPhysicalMaterial({
     color: (p.surround as { color?: string }).color ?? surrMatDef?.color ?? '#17181c',
-    roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide,
+    roughness: 0.78, metalness: 0.0,
+    clearcoat: 0.42, clearcoatRoughness: 0.55,
+    sheen: 0.25, sheenRoughness: 0.7, sheenColor: new THREE.Color('#3a3d45'),
+    side: THREE.DoubleSide,
   });
   const surround = lathe(surroundProfile(L, mm2m(p.surround.rollHeight), p.surround.rollCount, 0), seg, surroundMat);
   surround.userData.explodedGroup = 'front';
@@ -525,63 +595,146 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   /** Higher tones flex the diaphragm more (breakup is frequency-dependent). */
   const flexFFac = (fHz: number): number => Math.min(1.35, Math.max(0.4, 0.4 + fHz / 90));
 
+  /* ---------- rock (tilt) field ----------
+   * ONE angular lift field shared by every moving part, so the assembly
+   * seesaws as a coherent body (see layout.rockLiftY):
+   *   cone rim (rConeOut)  ↔ surround inner edge  — same radius, same lift
+   *   former wall (rFormerOut) ↔ spider inner bond — same radius, same lift
+   * The flexible surfaces decay the lift linearly across their span so the
+   * outer bonds stay exactly seated while the front of the roll rocks. */
+  const rimCap = rockRimCapM(Math.max(L.maxUp, L.maxDown), rollH);
+  const rRef = L.rConeOut;
+
+  /** Per-vertex r/θ snapshot of a mesh's rest geometry (for rigid tilt). */
+  const flexCacheOf = (mesh: THREE.Mesh) => {
+    const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const base = Float32Array.from(attr.array as Float32Array);
+    const n = attr.count;
+    const r = new Float32Array(n);
+    const th = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      r[i] = Math.hypot(base[i * 3], base[i * 3 + 2]);
+      th[i] = Math.atan2(base[i * 3 + 2], base[i * 3]);
+    }
+    return { mesh, attr, base, r, th, n };
+  };
+  const capCache = flexCacheOf(dustCap);
+  const formerCache = flexCacheOf(former);
+  const windCaches = windMeshes.map(flexCacheOf);
+  const rockSolids = [capCache, formerCache, ...windCaches];
+  let rockSolidActive = false;
+  let coneFlexActive = false;
+
+  interface RockState { lift: number; axis: number }
+
+  /** Rock lift + axis for this frame (zero when idle). The axis precesses
+   *  slowly and the amplitude carries a ~7 s beat, so first one side leads,
+   *  then the other — never a static list. */
+  const rockStateOf = (drive?: DriveState): RockState => {
+    const tilt01 = drive ? Math.min(1.15, Math.max(0, drive.tilt01)) : 0;
+    if (tilt01 <= 0.004 || !drive) return { lift: 0, axis: 0 };
+    const lift = Math.pow(tilt01, 1.35) * rimCap * rockBeat(drive.t);
+    return { lift, axis: drive.tiltAxis + 0.35 * Math.sin(drive.t * 0.11 + 0.8) };
+  };
+
+  /** Rigid tilt of the moving solids (dust cap, former, winding layers). */
+  function rockSolidsApply(rs: RockState): void {
+    if (rs.lift <= 1e-6) {
+      if (rockSolidActive) {
+        rockSolidActive = false;
+        for (const c of rockSolids) {
+          (c.attr.array as Float32Array).set(c.base);
+          c.attr.needsUpdate = true;
+          c.mesh.geometry.computeVertexNormals();
+        }
+      }
+      return;
+    }
+    rockSolidActive = true;
+    for (const c of rockSolids) {
+      const arr = c.attr.array as Float32Array;
+      for (let i = 0; i < c.n; i++) {
+        arr[i * 3 + 1] = c.base[i * 3 + 1] + rockLiftY(c.r[i], c.th[i], rs.axis, rs.lift, rRef);
+      }
+      c.attr.needsUpdate = true;
+      c.mesh.geometry.computeVertexNormals();
+    }
+  }
+
   /**
-   * Cone-body breakup: ring standing waves that crawl slowly + faint sector
-   * lobes at high intensity. The per-vertex envelope `coneW` is EXACTLY zero
-   * from the former bond through the shoulder (dust cap stays attached) and
-   * at the surround seat (bond never detaches) — only the free body flexes.
-   * Amplitude follows the PHYSICAL drive state, never the enhanced-viz
+   * Cone flexible body, ONE writer for both modes so the array is always
+   * rebuilt from the rest snapshot (no drift/accumulation):
+   *  1. breakup waves — ring standing waves crawling slowly + faint sector
+   *     lobes, gated by the `coneW` envelope (EXACTLY zero from the former
+   *     bond through the shoulder and at the surround seat: bonds stay put);
+   *  2. rock/tilt — the coherent rigid-body seesaw applied to EVERY vertex
+   *     (bonds included — the whole moving assembly tilts together).
+   * Amplitudes follow the PHYSICAL drive state, never the enhanced-viz
    * multiplier, so ×8 display stays honest about the flexible body.
    */
-  function applyConeWaves(drive?: DriveState): void {
+  function applyConeFlex(rs: RockState, drive?: DriveState): void {
     const wave01 = drive ? Math.min(1.15, Math.max(0, drive.amp01)) : 0;
-    const posAttr = () => cone.geometry.getAttribute('position') as THREE.BufferAttribute;
-    if (wave01 < 0.004) {
-      if (coneWaveActive) {                    // decayed to rest: restore once
-        coneWaveActive = false;
-        posAttr().array.set(coneBase);
-        posAttr().needsUpdate = true;
+    const waveOn = wave01 >= 0.004;
+    if (!waveOn && rs.lift <= 1e-6) {
+      if (coneFlexActive) {                    // decayed to rest: restore once
+        coneFlexActive = false;
+        const posAttr = cone.geometry.getAttribute('position') as THREE.BufferAttribute;
+        (posAttr.array as Float32Array).set(coneBase);
+        posAttr.needsUpdate = true;
         cone.geometry.computeVertexNormals();
       }
       return;
     }
-    coneWaveActive = true;
-    const fHz = Math.max(1, drive!.fHz);
-    const depthM = Math.max(4e-3, L.ySeat - L.yConeInner);
-    // cap scales with the driver: ~1.5 mm on an 8", ~5 mm on a 24"
-    const ampCap = Math.min(5e-3, Math.max(1.5e-3, 0.016 * L.rConeOut));
-    const amp = wave01 * Math.min(0.10 * depthM, ampCap) * flexFFac(fHz);
-    const span = Math.max(1e-3, L.rConeOut - L.rShoulder);
-    const k = (2 * Math.PI) / (span / 2.3);    // ~2.3 ring waves across the body
-    const tSec = drive!.t;
-    const drift = tSec * Math.PI * Math.min(2.2, Math.max(0.6, fHz / 25));
-    const sector = 0.45 * Math.min(1, wave01); // subtle breakup lobes
-    const arr = posAttr().array as Float32Array;
-    for (let i = 0; i < coneCount; i++) {
-      const w = coneW[i];
-      if (w === 0) continue;                   // bonds & shoulder stay EXACT
-      const ring = Math.sin((coneR[i] - L.rShoulder) * k - drift);
-      const lobes = sector * Math.cos(4 * coneTheta[i] + tSec * 1.3);
-      arr[i * 3 + 1] = coneBase[i * 3 + 1] + amp * w * (ring + lobes);
+    coneFlexActive = true;
+    let amp = 0, k = 0, drift = 0, sector = 0;
+    if (waveOn) {
+      const fHz = Math.max(1, drive!.fHz);
+      const depthM = Math.max(4e-3, L.ySeat - L.yConeInner);
+      // cap scales with the driver: ~1.5 mm on an 8", ~5 mm on a 24"
+      const ampCap = Math.min(5e-3, Math.max(1.5e-3, 0.016 * L.rConeOut));
+      amp = wave01 * Math.min(0.10 * depthM, ampCap) * flexFFac(fHz);
+      const span = Math.max(1e-3, L.rConeOut - L.rShoulder);
+      k = (2 * Math.PI) / (span / 2.3);        // ~2.3 ring waves across the body
+      drift = drive!.t * Math.PI * Math.min(2.2, Math.max(0.6, fHz / 25));
+      sector = 0.45 * Math.min(1, wave01);     // subtle breakup lobes
     }
-    posAttr().needsUpdate = true;
+    const posAttr = cone.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    for (let i = 0; i < coneCount; i++) {
+      let dy = rs.lift > 0 ? rockLiftY(coneR[i], coneTheta[i], rs.axis, rs.lift, rRef) : 0;
+      if (waveOn) {
+        const w = coneW[i];
+        if (w !== 0) {
+          const ring = Math.sin((coneR[i] - L.rShoulder) * k - drift);
+          const lobes = sector * Math.cos(4 * coneTheta[i] + drive!.t * 1.3);
+          dy += amp * w * (ring + lobes);
+        }
+      }
+      arr[i * 3 + 1] = coneBase[i * 3 + 1] + dy;
+    }
+    posAttr.needsUpdate = true;
     cone.geometry.computeVertexNormals();
   }
 
   /**
    * Surround surface behaviour on top of the exact roll kinematics:
-   *  1. high-excursion buckling — past ~55 % of the roll capability the
+   *  1. the ROCK — the inner edge rides the cone rim lift exactly (same
+   *     radius, same field) and decays linearly to zero at the frame seat,
+   *     so the roll visibly seesaws with the cone and the outer bond stays
+   *     glued;
+   *  2. high-excursion buckling — past ~55 % of the roll capability the
    *     rubber creases into radial wrinkles that deepen toward the limit;
-   *  2. travelling waves while music plays — two gentle ripples rolling
-   *     outward across the roll, scaled by the live drive intensity.
-   * Both live only between the bonded tabs (envelope zero on the 6 % inner
-   * and 10 % outer landings), so neither bond detaches or overlaps.
+   *  3. travelling waves while music plays — gentle ripples rolling outward
+   *     across the roll, scaled by the live drive intensity.
+   * The wrinkle/wave envelopes live only between the bonded tabs (zero on
+   * the 6 % inner / 10 % outer landings); the rock envelope is exact at the
+   * inner tab and zero at the outer landing.
    */
-  function flexSurround(x: number, drive?: DriveState): void {
+  function flexSurround(x: number, rs: RockState, drive?: DriveState): void {
     const wrAmp = surroundWrinkleAmp(x, L.surroundLimit, rollH);
     const wave01 = drive ? Math.min(1.15, Math.max(0, drive.amp01)) : 0;
     const waveAmp = drive ? wave01 * rollH * 0.055 * flexFFac(Math.max(1, drive.fHz)) : 0;
-    if (wrAmp <= 1e-6 && waveAmp <= 1e-6) return;
+    if (wrAmp <= 1e-6 && waveAmp <= 1e-6 && rs.lift <= 1e-6) return;
     const posAttr = surround.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const span = L.rSurfOut - L.rSurfIn;
@@ -592,24 +745,27 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       const px = arr[i * 3], py = arr[i * 3 + 1], pz = arr[i * 3 + 2];
       const r = Math.hypot(px, pz);
       const t = (r - L.rSurfIn) / span;
+      // rock: full rim lift at the inner bond → zero at the frame seat
+      let dy = rs.lift > 0 ? rockLiftY(r, Math.atan2(pz, px), rs.axis, rs.lift, rRef) * (1 - t) : 0;
       const u = Math.min(1, Math.max(0, (t - 0.06) / 0.82));
       let env = Math.sin(Math.PI * u);
       env *= env;
-      if (env <= 1e-4) continue;               // bonded tabs untouched
-      const th = Math.atan2(pz, px);
-      let dy = 0;
-      if (wrAmp > 0) {
-        // radial creases: sharp valleys, rounded crests (|sin|^1.4 shaping)
-        dy += wrAmp * env * (Math.pow(Math.abs(Math.sin(m * th / 2)), 1.4) * 2 - 0.9);
-      }
-      if (waveAmp > 0) {
-        // waves travel from the cone edge toward the frame while playing
-        dy += waveAmp * env * Math.sin(t * Math.PI * 4 - tSec * wSpeed);
+      if (env > 1e-4) {                          // bonded tabs: no wrinkle/wave
+        const th = Math.atan2(pz, px);
+        if (wrAmp > 0) {
+          // radial creases: sharp valleys, rounded crests (|sin|^1.4 shaping)
+          dy += wrAmp * env * (Math.pow(Math.abs(Math.sin(m * th / 2)), 1.4) * 2 - 0.9);
+        }
+        if (waveAmp > 0) {
+          // waves travel from the cone edge toward the frame while playing
+          dy += waveAmp * env * Math.sin(t * Math.PI * 4 - tSec * wSpeed);
+        }
       }
       arr[i * 3 + 1] = py + dy;
       if (wrAmp > 0) {
         // slight radial buckle: crests push outward, valleys pull inward
-        const dr = wrAmp * 0.3 * env * Math.cos(m * th + 0.7);
+        const th2 = Math.atan2(pz, px);
+        const dr = wrAmp * 0.3 * env * Math.cos(m * th2 + 0.7);
         const rn = Math.max(1e-4, r + dr);
         arr[i * 3] *= rn / r;
         arr[i * 3 + 2] *= rn / r;
@@ -619,24 +775,45 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
     surround.geometry.computeVertexNormals();
   }
 
+  /** Spider rock: the inner bond rides the former wall lift exactly (same
+   *  radius, same field) and decays to zero at the basket shelf. */
+  function rockSpider(rs: RockState): void {
+    if (rs.lift <= 1e-6) return;
+    const posAttr = spider.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    const span = L.rSpOut - L.rSpIn;
+    for (let i = 0; i < posAttr.count; i++) {
+      const px = arr[i * 3], pz = arr[i * 3 + 2];
+      const r = Math.hypot(px, pz);
+      const t = Math.min(1, Math.max(0, (r - L.rSpIn) / span));
+      arr[i * 3 + 1] += rockLiftY(r, Math.atan2(pz, px), rs.axis, rs.lift, rRef) * (1 - t);
+    }
+    posAttr.needsUpdate = true;
+    spider.geometry.computeVertexNormals();
+  }
+
   function deform(x: number, drive?: DriveState): void {
+    const rs = rockStateOf(drive);
     // surround: inner edge rides exactly on the cone edge, outer lands on the
     // frame seat (see surroundProfile — endpoints exact at every x); the
-    // flexible-surface passes below never touch the bonded tabs.
+    // flexible-surface passes below never detach the bonded tabs.
     surround.geometry.dispose();
     surround.geometry = new THREE.LatheGeometry(
       surroundProfile(L, rollH, rolls, x).map(([r, y]) => new THREE.Vector2(r, y)), seg);
-    flexSurround(x, drive);
+    flexSurround(x, rs, drive);
 
     // spider: inner edge bonded to the former (rides), outer seated on shelf
     spider.geometry.dispose();
     spider.geometry = new THREE.LatheGeometry(
       spiderProfile(L, corrN, corrD, x).map(([r, y]) => new THREE.Vector2(r, y)), seg);
+    rockSpider(rs);
 
-    applyConeWaves(drive);
+    applyConeFlex(rs, drive);
+    rockSolidsApply(rs);
 
     // tinsel leads: bonded to the FORMER just above the spider bond, routed
-    // through the basket to the actual terminal posts.
+    // through the basket to the actual terminal posts. The bond point rides
+    // the rock field too (same radius → same lift as the former wall).
     const rAttach = L.rFormerOut + mm2m(0.4);
     const yAttach = L.ySpider + mm2m(1.2) + x;
     for (let i = 0; i < leadMeshes.length; i++) {
@@ -647,10 +824,11 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       const ax = Math.cos(ang) * rAttach, az = Math.sin(ang) * rAttach;
       const post = termPos[i % termPos.length];
       const tx = side * Math.abs(post.x), tz = Math.abs(post.z);
+      const yRock = rs.lift > 0 ? rockLiftY(rAttach, ang, rs.axis, rs.lift, rRef) : 0;
       const midX = (ax + tx) / 2, midZ = (az + tz) / 2;
       const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(ax, yAttach, az),
-        new THREE.Vector3(midX, (yAttach + post.y) / 2 - mm2m(3), midZ),
+        new THREE.Vector3(ax, yAttach + yRock, az),
+        new THREE.Vector3(midX, (yAttach + yRock + post.y) / 2 - mm2m(3), midZ),
         new THREE.Vector3(tx, post.y, tz)
       );
       const g = new THREE.TubeGeometry(curve, 14, mm2m(0.55), 6, false);

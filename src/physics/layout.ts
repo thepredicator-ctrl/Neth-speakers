@@ -353,3 +353,40 @@ export function surroundWrinkleCount(rMidM: number, rollHeightM: number): number
 export function minFormerHeightM(d: DriverParams): number {
   return computeLayout(d).requiredFormerH;
 }
+
+/* ---------------------------------------------------------------------------
+ * Cone rock / tilt (pure math — consumed per-vertex in geometry.ts).
+ *
+ * Real long-throw drivers never move as a perfect piston: suspension
+ * asymmetry and the finite stiffness of the moving assembly let one side of
+ * the cone lead the stroke while the other lags — a slow rocking (tilt) mode
+ * superimposed on the axial excursion. The surround rides the same tilt at
+ * its inner edge and decays to zero at the frame seat, so the whole front
+ * assembly "seesaws" together exactly like the real thing.
+ *
+ * The tilt is an ANGULAR mode: lift(r, θ) = rimLift · (r / rRef) · cos(θ − axis).
+ * At the reference radius (cone rim) the lift equals rimLift·cos(θ − axis);
+ * at the axis it is zero, so bonds never tear and the dust-cap apex (r≈0)
+ * stays put laterally.
+ * ------------------------------------------------------------------------- */
+
+/** Rim lift cap (m) for a driver with one-way mechanical limit `xMechM` and
+ *  roll crest height `rollHeightM`. Bounded so the rock can never visually
+ *  tear the assembly: ≤ 22 % of Xmech and ≤ 45 % of the roll crest. */
+export function rockRimCapM(xMechM: number, rollHeightM: number): number {
+  return Math.min(0.22 * Math.max(0, xMechM), 0.45 * Math.max(0, rollHeightM), 0.018);
+}
+
+/** Axial rock lift (m) at radius `rM`, angle `theta` for a tilt of rim
+ *  amplitude `rimLiftM` around the diameter at `axisAngle`, referenced to
+ *  `rRefM` (the cone rim radius). Pure trigonometry — the envelope decay on
+ *  the surround/spider is applied by the caller so bonds stay exact. */
+export function rockLiftY(rM: number, theta: number, axisAngle: number, rimLiftM: number, rRefM: number): number {
+  return rimLiftM * (rM / Math.max(1e-6, rRefM)) * Math.cos(theta - axisAngle);
+}
+
+/** Slow amplitude modulation of the rock — a quasi-periodic beat (period
+ *  ≈ 7 s) so one side leads for a while, then the other, organically. */
+export function rockBeat(tSec: number): number {
+  return 0.7 + 0.3 * Math.sin(2 * Math.PI * tSec / 7 + 1.3);
+}

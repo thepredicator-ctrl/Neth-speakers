@@ -18,7 +18,7 @@ import type {
   DriverParams, EnclosureParams, AmplifierParams, AudioSettings, SimSettings,
   ConeParams, SurroundParams, SpiderParams, VoiceCoilParams, MagnetParams, FrameParams,
 } from './types';
-import { computeLayout, minFormerHeightM, SURROUND_TRAVEL_FACTOR } from './layout';
+import { computeLayout, minFormerHeightM } from './layout';
 
 /* ------------------------------------------------------------------ */
 /* primitive helpers                                                   */
@@ -89,10 +89,10 @@ export function sanitizeSurround(s: SurroundParams, coneOuter?: number): Surroun
     innerDiameter: inner,
     outerDiameter: inner + 2 * rollWidth,
     rollCount: int(s.rollCount, 1, 2, 1),
-    // rollHeight up to 80 mm: monster/SPL builds (18"–24" and beyond) ship
-    // 32–50 mm rolls; the roll capability is 1.25 × rollHeight (layout.ts) so
-    // a 48 mm roll supports ~60 mm one-way travel, an 80 mm roll ~100 mm.
-    rollHeight: num(s.rollHeight, 0.5, 80, 9),
+    // rollHeight up to 110 mm: monster/SPL builds (18"–24" and beyond) ship
+    // 32–60 mm rolls; the roll capability is 1.25 × rollHeight (layout.ts) so
+    // a 48 mm roll supports ~60 mm one-way travel, a 110 mm roll ~137 mm.
+    rollHeight: num(s.rollHeight, 0.5, 110, 9),
     rollWidth,
     thickness: num(s.thickness, 0.05, 5, 1.2),
     stiffness: num(s.stiffness, 1, 200000, 520),
@@ -245,11 +245,15 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     surround.outerDiameter = surround.innerDiameter + 2 * surround.rollWidth;
   }
 
-  // AUTO-BALANCE: the roll must travel the full linear excursion
-  // (capability ≈ 1.25 × rollHeight, see layout.ts) — the user's Xmax
-  // override counts as much as the coil-in-gap estimate — AND it must keep
+  // AUTO-BALANCE: the roll must CARRY the full linear excursion with real
+  // headroom — a surround that bottoms out exactly at Xmax is how real
+  // drivers get torn surrounds. SPL builds run the roll crest at ≈ 1.3 ×
+  // Xmax (capability 1.25 × 1.3 ≈ 1.6 × Xmax one-way). It must also keep
   // crest body in proportion to the strip: a 40 mm-wide ribbon with a 9 mm
   // crest reads as a flat gasket, not a roll. Floor: ½ × roll width.
+  // NOTE: rollHeight drives NO electrical stat — Sd comes from the strip
+  // width, Xmax from the coil/gap — so a taller roll only widens the
+  // mechanical envelope (more Xmech headroom), exactly like reality.
   const windHMM = (coil.windingHeight != null ? coil.windingHeight
     : coil.turnsPerLayer * coil.wireDiameter * 1.08);
   const xmaxCalcMM = coil.config === 'overhung'
@@ -257,9 +261,9 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
     : Math.max(0, (magnet.topPlateThickness - windHMM) / 2);
   const xmaxOvrMM = d.xmaxOverride != null ? (ovr(d.xmaxOverride, 0.05, 60) ?? 0) : 0;
   const xmaxTargetMM = Math.max(xmaxCalcMM, xmaxOvrMM);
-  const rollHeightMin = Math.max(xmaxTargetMM / SURROUND_TRAVEL_FACTOR, 0.5 * surround.rollWidth);
+  const rollHeightMin = Math.max(1.3 * xmaxTargetMM, 0.5 * surround.rollWidth);
   if (rollHeightMin > surround.rollHeight) {
-    surround.rollHeight = Math.min(80, rollHeightMin);
+    surround.rollHeight = Math.min(110, rollHeightMin);
   }
 
   // AUTO-BALANCE: the effective radiating diameter is DERIVED from the drawn
@@ -425,5 +429,6 @@ export function sanitizeSim(s: SimSettings): SimSettings {
     paused: s.paused === true,
     quality: str((s as { quality?: unknown }).quality, ['precision', 'balanced', 'fast'] as const, 'precision'),
     vizSmoothing: num((s as { vizSmoothing?: unknown }).vizSmoothing, 0, 0.95, 0.35),
+    flexGain: num((s as { flexGain?: unknown }).flexGain, 0, 2, 1),
   };
 }
