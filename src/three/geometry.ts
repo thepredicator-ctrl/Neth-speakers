@@ -117,8 +117,8 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   const poleMat = new THREE.MeshStandardMaterial({ color: '#6a6f77', roughness: 0.5, metalness: 0.8, side: THREE.DoubleSide });
   const frameMat = new THREE.MeshStandardMaterial({
     color: (p.frame as { color?: string }).color ?? '#33363c',
-    roughness: (p.frame as { style?: string }).style === 'diecast' ? 0.5 : 0.6,
-    metalness: (p.frame as { style?: string }).style === 'diecast' ? 0.7 : 0.55,
+    roughness: (p.frame as { style?: string }).style === 'diecast' ? 0.42 : 0.52,
+    metalness: (p.frame as { style?: string }).style === 'diecast' ? 0.85 : 0.62,
     side: THREE.DoubleSide,
   });
   const formerMat = new THREE.MeshStandardMaterial({ color: mats(p.coil.formerMaterialId)?.color ?? '#6b4d1e', roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide });
@@ -313,14 +313,46 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
 
   /* ---------- frame / basket ---------- */
   const flangeW = mm2m(7);
-  const frontFlange = lathe([
-    [L.rSurfOut - mm2m(2), L.yFrameSeat],
-    [L.rFrameOut, L.yFrameSeat],
-    [L.rFrameOut, L.yFrameSeat - flangeW],
-    [L.rSurfOut - mm2m(4), L.yFrameSeat - flangeW],
-  ], seg, frameMat);
+  // rolled lip: both outer corners filleted like a real stamped/cast flange
+  const flangePts: [number, number][] = [];
+  {
+    const lipR = mm2m(2);
+    const rIn = L.rSurfOut - mm2m(2), rOut = L.rFrameOut;
+    const yT = L.yFrameSeat, yB = L.yFrameSeat - flangeW;
+    flangePts.push([rIn, yT]);
+    // top face → rounded top-outer corner
+    for (let i = 0; i <= 4; i++) {
+      const a = (i / 4) * Math.PI / 2;
+      flangePts.push([rOut - lipR + lipR * Math.sin(a), yT - lipR + lipR * Math.cos(a)]);
+    }
+    // outer wall → rounded bottom-outer corner
+    for (let i = 0; i <= 4; i++) {
+      const a = (i / 4) * Math.PI / 2;
+      flangePts.push([rOut - lipR + lipR * Math.cos(a), yB + lipR - lipR * Math.sin(a)]);
+    }
+    flangePts.push([L.rSurfOut - mm2m(4), yB]);
+  }
+  const frontFlange = lathe(flangePts, seg, frameMat);
   frontFlange.userData.explodedGroup = 'front';
   staticParts.add(frontFlange);
+
+  // countersunk bolt circle: dark recesses sunk into the flange top face —
+  // instantly reads as a real mounting flange instead of a plain ring
+  {
+    const nBolts = Math.max(4, Math.min(12, Math.round((p.frame as { mountingHoles?: number }).mountingHoles ?? 4)));
+    const rBolt = (L.rSurfOut + L.rFrameOut) / 2 - mm2m(1.5);
+    const rHole = Math.min(mm2m(2.1), (L.rFrameOut - L.rSurfOut) * 0.22);
+    if (rHole > mm2m(0.8)) {
+      const holeMat = new THREE.MeshStandardMaterial({ color: '#0b0c0e', roughness: 0.92, metalness: 0.2 });
+      for (let i = 0; i < nBolts; i++) {
+        const ang = (i / nBolts) * Math.PI * 2 + Math.PI / nBolts;
+        const hole = new THREE.Mesh(new THREE.CylinderGeometry(rHole, rHole, mm2m(2), 14), holeMat);
+        hole.position.set(Math.cos(ang) * rBolt, L.yFrameSeat - mm2m(0.7), Math.sin(ang) * rBolt);
+        hole.userData.explodedGroup = 'front';
+        staticParts.add(hole);
+      }
+    }
+  }
 
   // gasket (optional)
   if ((p.frame as { gasket?: boolean }).gasket !== false) {
@@ -346,23 +378,59 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   shelf.userData.explodedGroup = 'motor';
   staticParts.add(shelf);
 
-  // basket legs: two bonded segments per leg —
-  //   A: flange underside → shelf ring edge
-  //   B: shelf underside → motor rim (top-plate/boot ring)
-  // 8 legs; die-cast baskets get wide tapered ribs, stamped get narrower ones.
+  // basket legs: extruded CAST RIBS (not boxes) — wide at the flange, waisted
+  // through the window, flared foot, rounded edges from the extrude bevel;
+  // diecast ribs carry a lightening window like a real casting. Two bonded
+  // segments per leg: flange→shelf, shelf→motor rim.
   const nLegs = 8;
-  const legW = (p.frame as { style?: string }).style === 'diecast' ? mm2m(15) : mm2m(9);
+  const diecast = (p.frame as { style?: string }).style === 'diecast';
+  const legW = diecast ? mm2m(15) : mm2m(9);
   const yLegTop = L.yFrameSeat - flangeW;
   const rLegTop = L.rFrameOut - mm2m(4);
   const rShelfLand = rShelfOut - mm2m(2);
   const rFoot = L.rLegFoot - mm2m(1.5);
-  const addLegSeg = (
-    aR: number, aY: number, bR: number, bY: number, ang: number, wTop: number, wBot: number,
+
+  /** Rib plate in the leg plane (local X = tangential width, local Y = along
+   *  the strut) with concave cast waist, extruded across the radial thickness
+   *  with rounded edges. Optional lightening window sized to the local width. */
+  const ribPlate = (len: number, wTop: number, wBot: number, thk: number, window: boolean): THREE.BufferGeometry => {
+    const xT = wTop / 2, xB = wBot / 2;
+    const cX = xB * 0.35;                                   // waist control
+    const s = new THREE.Shape();
+    s.moveTo(-xT, len);
+    s.lineTo(xT, len);
+    s.quadraticCurveTo(cX, len * 0.52, xB, 0);
+    s.lineTo(-xB, 0);
+    s.quadraticCurveTo(-cX, len * 0.52, -xT, len);
+    if (window) {
+      // half-width of the side bezier at the window centre (y = 0.6·len)
+      const t = 1 - 0.6;
+      const xW = (1 - t) * (1 - t) * xT + 2 * (1 - t) * t * cX + t * t * xB;
+      const rH = Math.min(xW * 0.42, len * 0.17);
+      if (rH > mm2m(1.1)) {
+        const h = new THREE.Path();
+        h.absarc(0, len * 0.6, rH, 0, Math.PI * 2);
+        s.holes.push(h);
+      }
+    }
+    const g = new THREE.ExtrudeGeometry(s, {
+      depth: thk, bevelEnabled: true,
+      bevelThickness: Math.min(thk * 0.3, mm2m(1.4)),
+      bevelSize: Math.min(thk * 0.3, mm2m(1.4)),
+      bevelSegments: 2, curveSegments: 12,
+    });
+    g.translate(0, 0, -thk / 2);
+    return g;
+  };
+
+  const addRib = (
+    aR: number, aY: number, bR: number, bY: number, ang: number,
+    wTop: number, wBot: number, thk: number, window: boolean,
   ): void => {
     const a = new THREE.Vector3(Math.cos(ang) * aR, aY, Math.sin(ang) * aR);
     const b = new THREE.Vector3(Math.cos(ang) * bR, bY, Math.sin(ang) * bR);
     const len = a.distanceTo(b);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry((wTop + wBot) / 2, len, mm2m(4.5)), frameMat);
+    const leg = new THREE.Mesh(ribPlate(len, wTop, wBot, thk, window), frameMat);
     leg.position.copy(a).add(b).multiplyScalar(0.5);
     const dir = new THREE.Vector3().subVectors(b, a).normalize();
     leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
@@ -371,10 +439,11 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
   };
   for (let i = 0; i < nLegs; i++) {
     const ang = (i / nLegs) * Math.PI * 2;
-    addLegSeg(rLegTop, yLegTop, rShelfLand, L.yShelfTop - mm2m(0.5), ang, legW, legW * 0.8);
-    addLegSeg(rShelfLand, L.yShelfTop - mm2m(2.5), rFoot, L.yLegFoot, ang, legW * 0.7, legW * 0.55);
+    const thk = diecast ? mm2m(5.5) : mm2m(3.5);
+    addRib(rLegTop, yLegTop, rShelfLand, L.yShelfTop - mm2m(0.5), ang, legW, legW * 0.82, thk, diecast);
+    addRib(rShelfLand, L.yShelfTop - mm2m(2.5), rFoot, L.yLegFoot, ang, legW * 0.72, legW * 0.58, thk * 0.9, false);
     // foot pad — bonds the leg to the plate/boot rim (no floating ends)
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.8, mm2m(3), mm2m(7)), frameMat);
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(legW * 0.9, mm2m(3), mm2m(7)), frameMat);
     pad.position.set(Math.cos(ang) * rFoot, L.yLegFoot + mm2m(0.8), Math.sin(ang) * rFoot);
     pad.rotation.y = -ang;
     pad.userData.explodedGroup = 'frame';
@@ -399,6 +468,15 @@ export function buildDriver(p: DriverParams, mats: (id: string) => MaterialDef |
       post.position.set(sx * rTerm, yTerm + mm2m(7), sz * mm2m(3));
       post.userData.explodedGroup = 'frame';
       staticParts.add(post);
+      // colour-coded insulator collar at the post base (+ red / − black)
+      const collar = new THREE.Mesh(
+        new THREE.TorusGeometry(mm2m(2.9), mm2m(1.05), 10, 20),
+        new THREE.MeshStandardMaterial({ color: sz > 0 ? '#a33028' : '#101113', roughness: 0.6, metalness: 0.05 }),
+      );
+      collar.rotation.x = Math.PI / 2;
+      collar.position.set(sx * rTerm, yTerm + mm2m(2.6), sz * mm2m(3));
+      collar.userData.explodedGroup = 'frame';
+      staticParts.add(collar);
       termPos.push({ x: sx * rTerm, y: yTerm + mm2m(11), z: sz * mm2m(3) });
     }
   }

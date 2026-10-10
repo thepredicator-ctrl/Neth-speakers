@@ -171,6 +171,22 @@ export interface PresetDef {
 
 export const PRESETS: PresetDef[] = [
   {
+    id: 'blank', name: 'Start From Nothing (blank chassis)',
+    blurb: 'A bare, unstyled baseline: raw grey pulp cone, flat cap, stamped steel basket, small ferrite motor, no boot, no trim. Nothing is copied from any reference driver — open the Parts Editor and shape every part into your own build.',
+    make: (b) => {
+      const d = clone(b);
+      // raw, unstyled appearance — the user builds the look from here
+      d.cone.materialId = 'paper'; d.cone.color = '#8d9299';
+      d.cone.profile = 'straight'; d.cone.finish = 'matte';
+      d.cone.dustCapShape = 'flat';
+      d.surround.materialId = 'rubber-butyl'; d.surround.color = '#232629';
+      d.spider.materialId = 'spider-cotton';
+      d.frame.style = 'stamped'; d.frame.color = '#3b3e44'; d.frame.boot = false;
+      d.magnet.materialId = 'ferrite-y30'; d.magnet.painted = false;
+      return d;
+    },
+  },
+  {
     id: 'neth10', name: 'Neth-10 Classic (8″ bass-mid)',
     blurb: 'Balanced paper-cone 8″ woofer. The reference demo driver.',
     make: () => defaultDriver(),

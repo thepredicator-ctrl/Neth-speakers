@@ -5,11 +5,26 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildDriver, buildEnclosure, type DriverGeometry, type EnclosureGeometry, type DriveState } from './geometry';
 import type { DriverParams, EnclosureParams, MaterialDef } from '../physics/types';
 
 export type ViewName = 'persp' | 'front' | 'side' | 'rear' | 'recenter';
 export type Quality = 'low' | 'med' | 'high';
+
+/** Soft radial-gradient blob used as a fake contact shadow under the driver. */
+function contactShadowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(0,0,0,0.9)');
+  g.addColorStop(0.45, 'rgba(0,0,0,0.38)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
 
 export interface SceneOptions {
   getDisplacement: () => number;   // meters (already includes viz handling outside)
@@ -39,6 +54,7 @@ export class SpeakerScene {
   private vizScale = 1;
   private vizSmooth = 0;
   private frameTimes: number[] = [];
+  private contactShadow: THREE.Mesh;
   fps = 0;
 
   /* --- flexible-body drive estimator (cone breakup / surround waves) --- */
@@ -62,9 +78,22 @@ export class SpeakerScene {
     this.renderer.shadowMap.enabled = false;
     this.renderer.localClippingEnabled = true;
     this.renderer.setClearColor(0x000000, 0);
+    // Film-grade response: ACES gives metals and rubber real depth instead of
+    // the flat, blown-out look of raw sRGB output.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.18;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
+    // Studio environment map — WITHOUT this, every metalness>0 material
+    // (diecast basket, plates, terminals) reflects nothing and renders as a
+    // dead black silhouette. This is the single biggest visual upgrade.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const envScene = new RoomEnvironment();
+    this.scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    envScene.dispose?.();
+    pmrem.dispose();
+
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.005, 40);
     this.camera.position.set(0.42, 0.5, 0.55);
 
@@ -74,16 +103,29 @@ export class SpeakerScene {
     this.controls.minDistance = 0.08;
     this.controls.maxDistance = 8;
 
-    // lighting — studio style
-    const key = new THREE.DirectionalLight(0xfff1e0, 2.6);
+    // lighting — studio style. With the environment map carrying reflections,
+    // the direct lights shape form: warm key, cool fill, brand-orange rim.
+    const key = new THREE.DirectionalLight(0xfff1e0, 2.2);
     key.position.set(1.4, 2.2, 1.2);
-    const fill = new THREE.DirectionalLight(0x9fb4ff, 0.7);
+    const fill = new THREE.DirectionalLight(0x9fb4ff, 0.55);
     fill.position.set(-1.6, 0.6, -1.2);
-    const rim = new THREE.DirectionalLight(0xff7a1a, 0.9);
+    const rim = new THREE.DirectionalLight(0xff7a1a, 0.8);
     rim.position.set(0.4, -1.4, -1.6);
-    const amb = new THREE.AmbientLight(0x404448, 1.1);
-    const hemi = new THREE.HemisphereLight(0x50565e, 0x0c0d10, 0.9);
+    const amb = new THREE.AmbientLight(0x404448, 0.5);
+    const hemi = new THREE.HemisphereLight(0x50565e, 0x0c0d10, 0.55);
     this.scene.add(key, fill, rim, amb, hemi);
+
+    // soft contact shadow — grounds the driver so it doesn't float in the void
+    this.contactShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: contactShadowTexture(),
+        transparent: true, opacity: 0.55, depthWrite: false,
+      }),
+    );
+    this.contactShadow.rotation.x = -Math.PI / 2;
+    this.contactShadow.renderOrder = -1;
+    this.scene.add(this.contactShadow);
 
     this.resize();
     this.loop();
@@ -98,7 +140,19 @@ export class SpeakerScene {
     this.driver = buildDriver(p, this.mats, this.quality);
     this.applyClipping(this.driver.group);
     this.scene.add(this.driver.group);
+    this.placeContactShadow();
     this.frameView();
+  }
+
+  /** Scale/position the fake soft shadow from the driver's footprint + depth. */
+  private placeContactShadow(): void {
+    if (!this.contactShadow) return;
+    const d = this.params;
+    const r = d ? Math.max(d.surround.outerDiameter, d.magnet.diameter) / 2000 : 0.13;
+    const h = this.driverHeight();
+    this.contactShadow.scale.set(r * 4.6, r * 4.6, 1);
+    this.contactShadow.position.y = -h - r * 0.06;
+    (this.contactShadow.material as THREE.MeshBasicMaterial).opacity = 0.5;
   }
 
   setEnclosure(enc: EnclosureParams | null, driver: DriverParams): void {
@@ -287,6 +341,8 @@ export class SpeakerScene {
     this.controls.dispose();
     this.driver?.dispose();
     this.enclosure?.dispose();
+    this.contactShadow?.geometry.dispose();
+    (this.contactShadow?.material as THREE.Material | undefined)?.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
