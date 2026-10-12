@@ -78,14 +78,17 @@ export function EnclosureDesigner() {
    * resonance against the box air spring, so the required moving mass for a
    * target Fb is a CLOSED FORM — no search needed. Krr = ρc²·Spr²/Vb. */
   const [prTargetFb, setPrTargetFb] = useState(30);
+  const prCount = Math.max(1, Math.min(4, Math.round(enc.passive.count ?? 1)));
   const prTune = useMemo(() => {
     if (enc.type !== 'passiveRadiator' || !res || res.prArea <= 0 || res.prMass <= 0) return null;
     const Krr = (RHO0 * C_SOUND * C_SOUND * res.prArea * res.prArea) / Math.max(1e-6, res.VbEffM3);
     const Fpr = (1 / (2 * Math.PI)) * Math.sqrt((Krr + res.prStiffness) / res.prMass);
+    // the solver targets the AGGREGATE moving mass; the per-PR mass is that / count
+    const n = Math.max(1, Math.min(4, Math.round(enc.passive.count ?? 1)));
     const massForFb = (fbTarget: number) =>
-      ((Krr + res.prStiffness) / Math.pow(2 * Math.PI * Math.max(1, fbTarget), 2)) * 1000; // g
+      ((Krr + res.prStiffness) / Math.pow(2 * Math.PI * Math.max(1, fbTarget), 2)) * 1000 / n; // g per PR
     return { Krr, Fpr, massForFb };
-  }, [enc.type, res]);
+  }, [enc.type, res, enc.passive.count]);
 
   /* PR + cone excursion at rated drive from the exact 5-state model —
    * shows the PR leverage (PR stroke vs cone stroke) and flags overtravel. */
@@ -239,10 +242,11 @@ export function EnclosureDesigner() {
           {enc.type === 'passiveRadiator' ? (
             <Section title="Passive Radiator">
               <Param label="Enabled" value={enc.passive.enabled ? 1 : 0} min={0} max={1} step={1} digits={0} unit="" onChange={(v) => patchPassive({ enabled: v > 0.5 })} />
-              <Param label="Effective Ø" value={enc.passive.diameter} min={60} max={450} unit="mm" onChange={(v) => patchPassive({ diameter: v })} />
-              <Param label="Moving mass" value={enc.passive.mass} min={20} max={20000} step={5} digits={0} unit="g" badge="user" onChange={(v) => patchPassive({ mass: v })} />
-              <Param label="Suspension stiffness" value={enc.passive.suspensionStiffness} min={0} max={3000} step={10} digits={0} unit="N/m" onChange={(v) => patchPassive({ suspensionStiffness: v })} />
-              <Param label="Damping" value={enc.passive.damping} min={0.05} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patchPassive({ damping: v })} />
+              <Param label="Radiator count" value={prCount} min={1} max={4} step={1} digits={0} unit="×" onChange={(v) => patchPassive({ count: Math.round(v) })} hint="Identical PRs mounted on the cabinet SIDE walls — 1 right side · 2 one per side · 3 sides + rear · 4 two per side. Areas and masses add, so the auto-tune mass is PER radiator." />
+              <Param label="Effective Ø (each)" value={enc.passive.diameter} min={60} max={450} unit="mm" onChange={(v) => patchPassive({ diameter: v })} />
+              <Param label="Moving mass (each)" value={enc.passive.mass} min={20} max={20000} step={5} digits={0} unit="g" badge="user" onChange={(v) => patchPassive({ mass: v })} />
+              <Param label="Suspension stiffness (each)" value={enc.passive.suspensionStiffness} min={0} max={3000} step={10} digits={0} unit="N/m" onChange={(v) => patchPassive({ suspensionStiffness: v })} />
+              <Param label="Damping (each)" value={enc.passive.damping} min={0.05} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patchPassive({ damping: v })} />
               {prTune ? (
                 <>
                   <div className="readout-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 8 }}>
@@ -255,7 +259,7 @@ export function EnclosureDesigner() {
                       small
                       variant="primary"
                       onClick={() => patchPassive({ mass: Math.max(20, Math.round(prTune.massForFb(prTargetFb))) })}
-                      title="Solves Mpr = (K_box-air + K_suspension) / (2πFb)² and applies it"
+                      title="Solves the aggregate Mpr = (K_box-air + K_suspension) / (2πFb)² and applies 1/N of it to each radiator"
                     >
                       Auto-tune mass → {prTargetFb.toFixed(0)} Hz
                     </Btn>
@@ -326,8 +330,8 @@ export function EnclosureDesigner() {
                   ) : null}
                   {enc.type === 'passiveRadiator' && res && res.prArea > 0 ? (
                     <>
-                      <Readout k="PR area" v={(res.prArea * 1e4).toFixed(0)} unit="cm²" />
-                      <Readout k="PR moving mass" v={(res.prMass * 1000).toFixed(0)} unit="g" />
+                      <Readout k="PR area (total)" v={(res.prArea * 1e4).toFixed(0)} unit="cm²" />
+                      <Readout k="PR mass (total)" v={(res.prMass * 1000).toFixed(0)} unit="g" />
                       <Readout k="PR damping Qmp" v={((2 * Math.PI * (res.Fb ?? 30) * res.prMass) / Math.max(0.05, res.prDamping)).toFixed(1)} unit="" />
                     </>
                   ) : null}

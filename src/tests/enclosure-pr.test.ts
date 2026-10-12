@@ -17,6 +17,7 @@ import { computeTS } from '../physics/tsp';
 import { defaultDriver, defaultEnclosure } from '../physics/defaults';
 import { buildSystem, wiringInfo } from '../physics/stateSpace';
 import { computeEnclosure, responseOverGrid } from '../physics/freqresp';
+import { sanitizeEnclosure } from '../physics/validate';
 import { MATERIALS } from '../physics/materials';
 import type { DriverParams, EnclosureParams } from '../physics/types';
 
@@ -162,5 +163,50 @@ describe('passive-radiator physics', () => {
     const pr = responseOverGrid(sys.A, sys.B, sys.cpr!, [res.Fb!]);
     expect(Number.isFinite(pr.mag[0])).toBe(true);
     expect(pr.mag[0]).toBeLessThan(1);   // m per volt — sane scale
+  });
+});
+
+describe('multi-PR count (side-wall radiators)', () => {
+  it('N identical PRs aggregate: area, mass, stiffness and damping all × N', () => {
+    const one = prSystem(driver(), prBox());
+    const two = prSystem(driver(), prBox({ count: 2 }));
+    expect(two.res.prArea).toBeCloseTo(one.res.prArea * 2, 9);
+    expect(two.res.prMass).toBeCloseTo(one.res.prMass * 2, 9);
+    expect(two.res.prStiffness).toBeCloseTo(one.res.prStiffness * 2, 6);
+    expect(two.res.prDamping).toBeCloseTo(one.res.prDamping * 2, 6);
+    // system shape unchanged — still the 5-state PR model
+    expect(two.sys.n).toBe(5);
+    expect(two.sys.cpr![3]).toBe(1);
+  });
+
+  it('counted PRs keep a finite, sensible tuning and the notch tracks Fb', () => {
+    const { res, sys } = prSystem(driver(), prBox({ count: 3 }));
+    expect(res.Fb).not.toBeNull();
+    expect(Number.isFinite(res.Fb!)).toBe(true);
+    const f: number[] = [];
+    for (let hz = 8; hz <= 90; hz += 0.25) f.push(hz);
+    const cone = responseOverGrid(sys.A, sys.B, sys.cx, f);
+    let idx = 0, min = Infinity;
+    cone.mag.forEach((m, i) => { if (m < min) { min = m; idx = i; } });
+    expect(Math.abs(f[idx] - res.Fb!) / res.Fb!).toBeLessThan(0.10);
+  });
+
+  it('the auto-tune solver stays exact when the mass is split over N radiators', () => {
+    const target = 22;   // Hz
+    const { res } = prSystem(driver(), prBox({ count: 2 }));
+    const Spr = res.prArea;
+    const Krr = (1.204 * 343 * 343 * Spr * Spr) / res.VbEffM3;
+    const perPrG = ((Krr + 2 * 200) / Math.pow(2 * Math.PI * target, 2)) * 1000 / 2;
+    const { res: res2 } = prSystem(driver(), prBox({ count: 2, mass: Math.round(perPrG) }));
+    expect(Math.abs(res2.Fb! - target) / target).toBeLessThan(0.03);
+  });
+
+  it('sanitizeEnclosure clamps the count to 1–4 and defaults to 1', () => {
+    const base = prBox();
+    expect(sanitizeEnclosure({ ...base, passive: { ...base.passive, count: 99 } }, driver()).passive.count).toBe(4);
+    expect(sanitizeEnclosure({ ...base, passive: { ...base.passive, count: 0 } }, driver()).passive.count).toBe(1);
+    const withoutCount = { ...base.passive };
+    delete withoutCount.count;
+    expect(sanitizeEnclosure({ ...base, passive: withoutCount }, driver()).passive.count).toBe(1);
   });
 });

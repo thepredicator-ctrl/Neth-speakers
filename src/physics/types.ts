@@ -134,10 +134,11 @@ export interface EnclosurePort {
 
 export interface EnclosurePassiveRadiator {
   enabled: boolean;
-  diameter: number;   // mm — effective radiating diameter
-  mass: number;       // g — moving mass
-  suspensionStiffness: number; // N/m
-  damping: number;    // N·s/m
+  diameter: number;   // mm — effective radiating diameter (PER radiator)
+  count?: number;     // identical PRs mounted on the cabinet side walls (1–4, default 1)
+  mass: number;       // g — moving mass (PER radiator)
+  suspensionStiffness: number; // N/m (per radiator)
+  damping: number;    // N·s/m (per radiator)
 }
 
 export type DampingMaterial = 'none' | 'lightFill' | 'lined' | 'heavyFill';

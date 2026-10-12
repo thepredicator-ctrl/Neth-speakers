@@ -372,6 +372,7 @@ export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): Enclosur
       ...e.passive,
       enabled: e.passive.enabled === true,
       diameter: prDia,
+      count: int(e.passive.count, 1, 4, 1),
       mass: num(e.passive.mass, 5, 20000, 220),
       suspensionStiffness: num(e.passive.suspensionStiffness, 10, 100000, 350),
       damping: num(e.passive.damping, 0.01, 500, 1.2),

@@ -239,8 +239,11 @@ export function computeEnclosure(
   const portV = enc.port.shape === 'round'
     ? (Math.PI / 4) * Math.pow(mm2m(enc.port.diameter), 2) * mm2m(enc.port.length) * Math.max(1, enc.port.count) * 1e3
     : (mm2m(enc.port.slotWidth) * mm2m(enc.port.slotHeight) * mm2m(enc.port.length) * Math.max(1, enc.port.count)) * 1e3;
-  const prV = enc.passive.enabled && enc.type === 'passiveRadiator'
-    ? Math.max(0.05, 0.35 * (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 3) * 1e3)
+  const nPr = enc.passive.enabled && enc.type === 'passiveRadiator'
+    ? Math.max(1, Math.min(4, Math.round(Number(enc.passive.count) || 1)))
+    : 0;
+  const prV = nPr > 0
+    ? Math.max(0.05, 0.35 * (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 3) * 1e3) * nPr
     : 0;
   const subtractPort = enc.type === 'ported' ? portV : 0;
   const subtractPr = enc.type === 'passiveRadiator' ? prV : 0;
@@ -269,13 +272,15 @@ export function computeEnclosure(
   }
   portMass = RHO0 * portArea * portLengthEff;
 
-  // PR
+  // PR — N identical radiators mounted on the cabinet side walls behave as ONE
+  // aggregate piston: all share the same box pressure, so areas, masses,
+  // stiffnesses and damping add (common displacement x_pr).
   let prArea = 0, prMass = 0, prStiffness = 0, prDamping = 0.8;
   if (enc.type === 'passiveRadiator' && enc.passive.enabled) {
-    prArea = (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 2);
-    prMass = Math.max(1e-3, enc.passive.mass * 1e-3);
-    prStiffness = Math.max(0, enc.passive.suspensionStiffness);
-    prDamping = Math.max(0.05, enc.passive.damping);
+    prArea = nPr * (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 2);
+    prMass = nPr * Math.max(1e-3, enc.passive.mass * 1e-3);
+    prStiffness = nPr * Math.max(0, enc.passive.suspensionStiffness);
+    prDamping = nPr * Math.max(0.05, enc.passive.damping);
   }
 
   // Tuning

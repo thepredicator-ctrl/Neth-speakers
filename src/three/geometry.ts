@@ -1020,6 +1020,154 @@ export interface EnclosureGeometry {
   dispose(): void;
 }
 
+/* ---------------------------------------------------------------------------
+ * Passive-radiator unit — built in a LOCAL frame where +Y points OUT of the
+ * cabinet wall and Y=0 is the wall's outer surface. The caller orients the
+ * returned group onto one of the cabinet's SIDE walls. Anatomy, wall → out:
+ *   rubber gasket · cast flange ring with 8 hex bolts · deep stamped basket
+ *   with ribs and rear collar · machined-alloy dished piston · centre dome ·
+ *   half-roll surround whose OUTER half is a stretching sleeve bridging the
+ *   frame seat and the roll, so the suspension visibly flexes with stroke.
+ * Only the MOVING sub-assembly translates — the frame stays put on the wall.
+ * +x_pr drives the piston INTO the box (the model's sign convention), the
+ * inward stroke stretches the sleeve, the outward stroke compresses it.
+ * ------------------------------------------------------------------------- */
+interface PrUnit {
+  group: THREE.Group;
+  /** d = clamped displacement (m, positive = into the box). */
+  apply(d: number): void;
+}
+
+function buildPrUnit(
+  r: number, rollR: number, rF: number, bDepth: number, travel: number,
+  quality: 'low' | 'med' | 'high',
+): PrUnit {
+  const hi = quality !== 'low';
+  const group = new THREE.Group();
+  const moving = new THREE.Group();
+
+  const castMat = new THREE.MeshStandardMaterial({ color: '#2b2e35', roughness: 0.48, metalness: 0.6, envMapIntensity: 1.15, side: THREE.DoubleSide });
+  const castDark = new THREE.MeshStandardMaterial({ color: '#191b1f', roughness: 0.6, metalness: 0.45, side: THREE.DoubleSide });
+  const rubberMat = new THREE.MeshStandardMaterial({ color: '#0e0f12', roughness: 0.95, metalness: 0.02, side: THREE.DoubleSide });
+  const alloyMat = new THREE.MeshStandardMaterial({ color: '#a7adb5', roughness: 0.28, metalness: 0.92, envMapIntensity: 1.3, side: THREE.DoubleSide });
+  const alloyDark = new THREE.MeshStandardMaterial({ color: '#5f646c', roughness: 0.36, metalness: 0.9, envMapIntensity: 1.2, side: THREE.DoubleSide });
+
+  // -- gasket seated on the wall --------------------------------------------
+  const gasket = new THREE.Mesh(new THREE.TorusGeometry(rF * 1.004, mm2m(2.2), 8, hi ? 56 : 28), rubberMat);
+  gasket.rotation.x = Math.PI / 2;
+  gasket.position.y = mm2m(1);
+  group.add(gasket);
+
+  // -- cast flange ring (lathe profile: raised lip, chamfer, outer wall) ----
+  const flangePts = [
+    new THREE.Vector2(rF * 0.62, mm2m(9.5)),
+    new THREE.Vector2(rF - mm2m(3.5), mm2m(9.5)),
+    new THREE.Vector2(rF - mm2m(1.2), mm2m(7.8)),
+    new THREE.Vector2(rF, mm2m(5)),
+    new THREE.Vector2(rF, 0),
+  ];
+  group.add(new THREE.Mesh(new THREE.LatheGeometry(flangePts, hi ? 56 : 28), castMat));
+
+  // -- hex bolt heads around the flange -------------------------------------
+  const boltN = hi ? 8 : 6;
+  const boltR = Math.max(mm2m(2.6), rF * 0.022);
+  for (let i = 0; i < boltN; i++) {
+    const th = (i / boltN) * Math.PI * 2;
+    const bolt = new THREE.Mesh(
+      new THREE.CylinderGeometry(boltR, boltR, mm2m(3.4), 6),
+      alloyDark,
+    );
+    bolt.position.set(Math.cos(th) * (rF - boltR * 2.4), mm2m(11), Math.sin(th) * (rF - boltR * 2.4));
+    group.add(bolt);
+  }
+
+  // -- stamped basket: shell sweeping inward to a rear collar + cast ribs ---
+  const basketPts = [
+    new THREE.Vector2(rF * 0.62, mm2m(9.5)),
+    new THREE.Vector2(rF * 0.6, mm2m(2)),
+    new THREE.Vector2(r * 0.92, -bDepth * 0.42),
+    new THREE.Vector2(r * 0.68, -bDepth * 0.9),
+    new THREE.Vector2(r * 0.62, -bDepth),
+  ];
+  group.add(new THREE.Mesh(new THREE.LatheGeometry(basketPts, hi ? 56 : 28), castDark));
+  const collar = new THREE.Mesh(
+    new THREE.CylinderGeometry(r * 0.68, r * 0.62, mm2m(7), hi ? 48 : 24, 1, true),
+    castDark,
+  );
+  collar.position.y = -bDepth - mm2m(3);
+  group.add(collar);
+  const ribN = hi ? 8 : 6;
+  for (let i = 0; i < ribN; i++) {
+    const th = (i / ribN) * Math.PI * 2 + Math.PI / ribN;
+    const rib = new THREE.Mesh(
+      new THREE.BoxGeometry(mm2m(3), bDepth * 0.74 + mm2m(9), mm2m(4.5)),
+      castDark,
+    );
+    rib.position.set(Math.cos(th) * r * 0.8, -bDepth * 0.42 + mm2m(2), Math.sin(th) * r * 0.8);
+    rib.rotation.y = Math.PI / 2 - th;
+    group.add(rib);
+  }
+
+  // -- MOVING assembly: piston + dome + roll --------------------------------
+  const yBase = mm2m(2.5);   // rest offset of the piston rim above the wall
+  const pistonPts = [
+    new THREE.Vector2(0, mm2m(4.6)),
+    new THREE.Vector2(r * 0.32, mm2m(4.1)),
+    new THREE.Vector2(r * 0.6, mm2m(2.6)),
+    new THREE.Vector2(r * 0.86, mm2m(0.9)),
+    new THREE.Vector2(r, 0),
+    new THREE.Vector2(r, -mm2m(4.5)),
+    new THREE.Vector2(r * 0.94, -mm2m(5.2)),
+    new THREE.Vector2(r * 0.6, -mm2m(2.8)),
+    new THREE.Vector2(0, -mm2m(1.8)),
+  ];
+  moving.add(new THREE.Mesh(new THREE.LatheGeometry(pistonPts, hi ? 64 : 32), alloyMat));
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(r * 0.3, hi ? 36 : 20, hi ? 16 : 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    alloyDark,
+  );
+  dome.scale.y = 0.62;
+  dome.position.y = mm2m(4.1);
+  moving.add(dome);
+  // half-roll bonded to the piston rim (moves with it)
+  const roll = new THREE.Mesh(
+    new THREE.TorusGeometry(r + rollR * 0.2, rollR, hi ? 14 : 8, hi ? 56 : 28),
+    rubberMat,
+  );
+  roll.rotation.x = Math.PI / 2;
+  roll.position.y = rollR * 0.35;
+  moving.add(roll);
+  moving.position.y = yBase;
+  group.add(moving);
+
+  // -- outer half of the suspension: sleeve bridging frame seat ↔ roll ------
+  const seatY = mm2m(8.8);                       // under the flange lip
+  const rollEqRest = yBase + rollR * 0.35;       // roll equator height at rest
+  const sleeve = new THREE.Mesh(
+    new THREE.CylinderGeometry(r + rollR * 1.28, r + rollR * 1.28, 1, hi ? 56 : 28, 1, true),
+    rubberMat,
+  );
+  group.add(sleeve);
+  const setSleeve = (rollEq: number) => {
+    let span = seatY - rollEq;
+    let mid: number;
+    if (span >= mm2m(0.8)) mid = (seatY + rollEq) / 2;
+    else { span = mm2m(0.8); mid = seatY - span / 2; }
+    sleeve.scale.y = span;
+    sleeve.position.y = mid;
+  };
+  setSleeve(rollEqRest);
+
+  return {
+    group,
+    apply(d: number) {
+      const dd = Math.max(-travel, Math.min(travel, d));
+      moving.position.y = yBase - dd;            // +x_pr = into the box
+      setSleeve(yBase + rollR * 0.35 - dd);
+    },
+  };
+}
+
 export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quality: 'low' | 'med' | 'high'): EnclosureGeometry {
   const group = new THREE.Group();
   const W = mm2m(enc.internalWidth) + mm2m(enc.wallThickness) * 2;
@@ -1088,74 +1236,63 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
     group.add(grilleRing);
   }
 
-  // Passive radiator — a real moving assembly on the rear wall: recessed
-  // mount basket, half-roll rubber surround, composite piston and centre cap.
-  // It is driven every frame from the model's x_pr state via setPrDisplacement.
-  let prGroup: THREE.Group | null = null;
-  let prBaseY = 0;
+  // Passive radiators — real moving assemblies mounted on the cabinet SIDE
+  // walls (never the bottom): count 1 → right side · 2 → one per side ·
+  // 3 → sides + rear · 4 → two stacked per side. Only the piston assembly of
+  // each unit translates, driven every frame from the model's x_pr state.
+  const prUnits: PrUnit[] = [];
   let prTravel = 0;
+  let prClearX = 0;                       // interior keep-out around each PR
   if (enc.type === 'passiveRadiator' && enc.passive.enabled) {
+    const nPr = Math.max(1, Math.min(4, Math.round(Number(enc.passive.count) || 1)));
     const r = mm2m(enc.passive.diameter) / 2;
-    const rollR = Math.max(mm2m(6), r * 0.09);            // surround roll radius
+    const rollR = Math.max(mm2m(6), r * 0.1);
+    const rF = r + rollR * 2.1;           // flange outer radius
     prTravel = Math.max(mm2m(12), mm2m(enc.passive.diameter) * 0.16);
-    prGroup = new THREE.Group();
-    prBaseY = -D + t;
+    const bDepth = Math.max(r * 0.52, prTravel + mm2m(10));
+    prClearX = bDepth + mm2m(8);
 
-    // recessed mount dish (like a stamped PR basket)
-    const dishMat = new THREE.MeshStandardMaterial({ color: '#23262c', roughness: 0.55, metalness: 0.35 });
-    const dish = new THREE.Mesh(
-      new THREE.CylinderGeometry(r + rollR * 1.6, r + rollR * 2.2, mm2m(8), quality === 'low' ? 32 : 56, 1, true),
-      dishMat,
-    );
-    dish.rotation.x = Math.PI / 2;
-    dish.position.y = prBaseY + mm2m(3);
-    prGroup.add(dish);
-    const mountRing = new THREE.Mesh(
-      new THREE.TorusGeometry(r + rollR * 2.0, mm2m(2.6), 10, quality === 'low' ? 32 : 56),
-      new THREE.MeshStandardMaterial({ color: '#191b1f', roughness: 0.7, metalness: 0.2 }),
-    );
-    mountRing.rotation.x = Math.PI / 2;
-    mountRing.position.y = prBaseY + mm2m(1.2);
-    prGroup.add(mountRing);
+    // The driver owns the top face (+Y), so all four VERTICAL walls are the
+    // cabinet's "sides": ±X = left/right of the baffle, ±Z = front/back.
+    // fit = largest unit radius that clears that wall's usable span.
+    const fitXWalls = Math.min(D - t, H - 2 * t) * 0.47;
+    const fitZWalls = Math.min(W - 2 * t, D - t) * 0.47;
+    type Slot = { pos: [number, number, number]; rot: [number, number, number]; fit: number; tag: string };
+    const right = (z = 0): Slot => ({ pos: [W / 2, 0, z], rot: [0, 0, -Math.PI / 2], fit: fitXWalls, tag: 'right' });
+    const left = (z = 0): Slot => ({ pos: [-W / 2, 0, z], rot: [0, 0, Math.PI / 2], fit: fitXWalls, tag: 'left' });
+    const rear = (): Slot => ({ pos: [0, 0, -H / 2], rot: [-Math.PI / 2, 0, 0], fit: fitZWalls, tag: 'rear' });
+    const front = (): Slot => ({ pos: [0, 0, H / 2], rot: [Math.PI / 2, 0, 0], fit: fitZWalls, tag: 'front' });
+    const stackZ = (H - 2 * t) / 4;
+    const slots: Slot[] =
+      nPr === 1 ? [right()]
+      : nPr === 2 ? [right(), left()]
+      : nPr === 3 ? [right(), left(), rear()]
+      : rF * 1.08 <= stackZ * 0.96
+        ? [right(stackZ), right(-stackZ), left(stackZ), left(-stackZ)]
+        : [right(), left(), rear(), front()];
 
-    // moving sub-assembly: piston + surround + cap ride together on this group
-    const moving = new THREE.Group();
-    moving.position.y = 0;
-    const pistonMat = new THREE.MeshStandardMaterial({ color: '#141519', roughness: 0.85, metalness: 0.05 });
-    // shallow dished piston (aluminium/composite PR look)
-    const piston = new THREE.Mesh(
-      new THREE.CylinderGeometry(r, r, mm2m(7), quality === 'low' ? 32 : 56, 1, false),
-      pistonMat,
-    );
-    piston.rotation.x = Math.PI / 2;
-    piston.position.y = -mm2m(2.5);
-    moving.add(piston);
-    const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(r * 0.32, quality === 'low' ? 20 : 36, 14, 0, Math.PI * 2, 0, Math.PI / 2.6),
-      new THREE.MeshStandardMaterial({ color: '#1d2026', roughness: 0.5, metalness: 0.45 }),
-    );
-    dome.rotation.x = Math.PI;                          // dome points outward (−Y)
-    dome.position.y = -mm2m(6);
-    moving.add(dome);
-    // half-roll rubber surround joining the piston rim to the mount dish
-    const rollMat = new THREE.MeshStandardMaterial({ color: '#0e0f12', roughness: 0.95, metalness: 0 });
-    const roll = new THREE.Mesh(
-      new THREE.TorusGeometry(r + rollR * 0.4, rollR, quality === 'low' ? 10 : 16, quality === 'low' ? 32 : 60),
-      rollMat,
-    );
-    roll.rotation.x = Math.PI / 2;
-    roll.position.y = -mm2m(1);
-    moving.add(roll);
-    prGroup.add(moving);
-    group.add(prGroup);
+    for (const s of slots) {
+      const unit = buildPrUnit(r, rollR, rF, bDepth, prTravel, quality);
+      const sc = Math.min(1, s.fit / rF);   // visual-only fit clamp on extreme builds
+      unit.group.scale.setScalar(sc);
+      unit.group.position.set(...s.pos);
+      unit.group.rotation.set(...s.rot);
+      unit.group.userData.pr = { wall: s.tag, scale: sc };
+      group.add(unit.group);
+      prUnits.push(unit);
+    }
   }
 
-  // bracing
+  // bracing — pulled in around the PR basket + stroke so nothing clips through
   const braceMat = new THREE.MeshStandardMaterial({ color: '#4a3d2c', roughness: 0.9 });
-  for (const yy of [-D * 0.33, -D * 0.66]) {
-    const brace = new THREE.Mesh(new THREE.BoxGeometry(W * 0.96, mm2m(18), mm2m(30)), braceMat);
-    brace.position.y = yy;
-    group.add(brace);
+  let braceW = W * 0.96 - 2 * prClearX;
+  if (prUnits.length > 0 && braceW < mm2m(60)) braceW = W * 0.96 - 2 * (prTravel + mm2m(8));
+  if (braceW >= mm2m(50)) {
+    for (const yy of [-D * 0.33, -D * 0.66]) {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(braceW, mm2m(18), mm2m(30)), braceMat);
+      brace.position.y = yy;
+      group.add(brace);
+    }
   }
 
   void driver;
@@ -1163,7 +1300,7 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
     group,
     setWallOpacity(o: number) { wallMat.opacity = o; },
     setPrDisplacement(m: number) {
-      if (prGroup) prGroup.position.y = prBaseY + Math.max(-prTravel, Math.min(prTravel, m));
+      for (const u of prUnits) u.apply(m);
     },
     prTravel,
     dispose() {

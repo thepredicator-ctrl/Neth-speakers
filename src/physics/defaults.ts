@@ -118,6 +118,7 @@ export function defaultEnclosure(): EnclosureParams {
     passive: {
       enabled: false,
       diameter: 220,
+      count: 1,
       mass: 220,          // g
       suspensionStiffness: 350,
       damping: 1.2,
@@ -441,7 +442,7 @@ export const PRESETS: PresetDef[] = [
     },
     enclosure: {
       type: 'passiveRadiator', internalWidth: 520, internalHeight: 620, internalDepth: 460,
-      passive: { enabled: true, diameter: 330, mass: 420, suspensionStiffness: 280, damping: 1.6 },
+      passive: { enabled: true, diameter: 330, count: 1, mass: 420, suspensionStiffness: 280, damping: 1.6 },
       damping: 'heavyFill', bracingVolume: 1.6,
     },
   },
