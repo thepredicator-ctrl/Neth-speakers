@@ -28,6 +28,8 @@ function contactShadowTexture(): THREE.CanvasTexture {
 
 export interface SceneOptions {
   getDisplacement: () => number;   // meters (already includes viz handling outside)
+  /** Port / passive-radiator displacement (m) — drives the 3D radiator. */
+  getPrDisplacement?: () => number;
   showRestRing: boolean;
 }
 
@@ -47,8 +49,14 @@ export class SpeakerScene {
   private sectionAngle: number | null = null;
   private clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
   private getDisp: () => number;
+  private getPrDisp: () => number;
   private lastDisp = 0;
   private showEnclosure = false;
+  /** Box footprint (m) + centre height — so the camera can frame the whole
+   *  cabinet in the with-box test view. */
+  private encSize = 0;
+  private encCenterY = 0;
+  private encSig = '';
   private showRestRing = true;
   private running = true;
   private vizScale = 1;
@@ -75,6 +83,7 @@ export class SpeakerScene {
     this.container = container;
     this.mats = mats;
     this.getDisp = opts.getDisplacement;
+    this.getPrDisp = opts.getPrDisplacement ?? (() => 0);
     this.showRestRing = opts.showRestRing;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -208,12 +217,27 @@ export class SpeakerScene {
 
   setEnclosure(enc: EnclosureParams | null, driver: DriverParams): void {
     if (this.enclosure) { this.scene.remove(this.enclosure.group); this.enclosure.dispose(); this.enclosure = null; }
+    const prevSig = this.encSig;
     this.showEnclosure = enc != null;
+    let sig = '';
     if (enc) {
       this.enclosure = buildEnclosure(enc, driver, this.quality);
       this.applyClipping(this.enclosure.group);
       this.scene.add(this.enclosure.group);
+      const W = (enc.internalWidth + enc.wallThickness * 2) / 1000;
+      const D = (enc.internalDepth + enc.wallThickness) / 1000;
+      const H = (enc.internalHeight + enc.wallThickness * 2) / 1000;
+      this.encSize = Math.max(W, D, H);
+      this.encCenterY = -D / 2 + enc.wallThickness / 2000;
+      sig = `${Math.round(W * 1000)}x${Math.round(D * 1000)}x${Math.round(H * 1000)}`;
+    } else {
+      this.encSize = 0;
+      this.encCenterY = 0;
     }
+    this.encSig = sig;
+    // reframe ONLY when the box appears/disappears or is resized — not on
+    // every driver tweak, so a user mid-orbit never loses their angle
+    if (sig !== prevSig && this.showEnclosure) this.frameView();
   }
 
   setWallOpacity(o: number): void {
@@ -284,12 +308,18 @@ export class SpeakerScene {
   private fitDistance(): number {
     const d = this.params;
     const size = d ? Math.max(d.magnet.diameter, d.surround.outerDiameter) / 1000 : 0.25;
-    return Math.max(0.12, size);
+    let s = Math.max(0.12, size);
+    // with the cabinet shown, frame the CABINET, not the bare driver
+    if (this.showEnclosure && this.encSize > 0) s = Math.max(s, this.encSize);
+    return s;
   }
 
   frameView(): void {
     const d = this.fitDistance() * 1.9;
-    this.controls.target.set(0, -this.driverHeight() * 0.35, 0);
+    const ty = this.showEnclosure && this.encSize > 0
+      ? this.encCenterY * 0.9
+      : -this.driverHeight() * 0.35;
+    this.controls.target.set(0, ty, 0);
     this.camera.position.set(d * 0.55, d * 0.55, d * 0.62);
     this.controls.update();
   }
@@ -395,6 +425,8 @@ export class SpeakerScene {
         else if (c.userData.explodedGroup === 'front') c.position.y = c.userData.baseY + k * 0.8;
       });
     }
+    // passive radiator rides the real x_pr state of the box model
+    if (this.enclosure) this.enclosure.setPrDisplacement(this.getPrDisp());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
 

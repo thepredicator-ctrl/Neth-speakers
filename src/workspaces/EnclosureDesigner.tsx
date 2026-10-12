@@ -73,6 +73,41 @@ export function EnclosureDesigner() {
     return { n, series, perDriver };
   }, [enc.driverCount, enc.wiring]);
 
+  /* ---- Passive-radiator tuning: ω² = (K_box-air + K_suspension) / M_pr ----
+   * The cone-excursion notch (system tuning Fb) sits at the PR's free
+   * resonance against the box air spring, so the required moving mass for a
+   * target Fb is a CLOSED FORM — no search needed. Krr = ρc²·Spr²/Vb. */
+  const [prTargetFb, setPrTargetFb] = useState(30);
+  const prTune = useMemo(() => {
+    if (enc.type !== 'passiveRadiator' || !res || res.prArea <= 0 || res.prMass <= 0) return null;
+    const Krr = (RHO0 * C_SOUND * C_SOUND * res.prArea * res.prArea) / Math.max(1e-6, res.VbEffM3);
+    const Fpr = (1 / (2 * Math.PI)) * Math.sqrt((Krr + res.prStiffness) / res.prMass);
+    const massForFb = (fbTarget: number) =>
+      ((Krr + res.prStiffness) / Math.pow(2 * Math.PI * Math.max(1, fbTarget), 2)) * 1000; // g
+    return { Krr, Fpr, massForFb };
+  }, [enc.type, res]);
+
+  /* PR + cone excursion at rated drive from the exact 5-state model —
+   * shows the PR leverage (PR stroke vs cone stroke) and flags overtravel. */
+  const prExc = useMemo(() => {
+    if (enc.type !== 'passiveRadiator' || !res || res.prArea <= 0) return null;
+    const r = computeEnclosure(enc, ts, drvL);
+    const sys = buildSystem({
+      ts, enclosure: enc, encResult: r,
+      wiring: wiringInfo(ts, enc.driverCount, enc.wiring, enc.coilWiring, 1),
+      sourceImpedance: amplifier.outputImpedance, sampleRate: 48000,
+    });
+    if (!sys.cpr) return null;
+    const f = logspace(8, 160, 120);
+    const pr = responseOverGrid(sys.A, sys.B, sys.cpr, f);
+    const cone = responseOverGrid(sys.A, sys.B, sys.cx, f);
+    const vRef = amp.vpeak / Math.SQRT2;
+    let peakPr = 0, peakCone = 0, fAtPeak = 0;
+    pr.mag.forEach((m, i) => { const v = m * vRef * 1000; if (v > peakPr) { peakPr = v; fAtPeak = f[i]; } });
+    cone.mag.forEach((m, i) => { peakCone = Math.max(peakCone, m * vRef * 1000); });
+    return { peakPr, peakCone, fAtPeak, leverage: peakPr / Math.max(1e-6, peakCone) };
+  }, [enc, ts, drvL, res, amplifier.outputImpedance, amp.vpeak]);
+
   /* ---- Box Wizard: numeric alignment search on the real model ---- */
   const runWizard = (kind: 'sealedButterworth' | 'maxflat' | 'ebs') => {
     setWizardBusy(true);
@@ -205,9 +240,44 @@ export function EnclosureDesigner() {
             <Section title="Passive Radiator">
               <Param label="Enabled" value={enc.passive.enabled ? 1 : 0} min={0} max={1} step={1} digits={0} unit="" onChange={(v) => patchPassive({ enabled: v > 0.5 })} />
               <Param label="Effective Ø" value={enc.passive.diameter} min={60} max={450} unit="mm" onChange={(v) => patchPassive({ diameter: v })} />
-              <Param label="Moving mass" value={enc.passive.mass} min={20} max={2000} step={5} digits={0} unit="g" badge="user" onChange={(v) => patchPassive({ mass: v })} />
+              <Param label="Moving mass" value={enc.passive.mass} min={20} max={20000} step={5} digits={0} unit="g" badge="user" onChange={(v) => patchPassive({ mass: v })} />
               <Param label="Suspension stiffness" value={enc.passive.suspensionStiffness} min={0} max={3000} step={10} digits={0} unit="N/m" onChange={(v) => patchPassive({ suspensionStiffness: v })} />
               <Param label="Damping" value={enc.passive.damping} min={0.05} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patchPassive({ damping: v })} />
+              {prTune ? (
+                <>
+                  <div className="readout-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 8 }}>
+                    <Readout k="PR free-air res." v={prTune.Fpr.toFixed(1)} unit="Hz" acc />
+                    <Readout k="Box air stiffness" v={(prTune.Krr / 1000).toFixed(2)} unit="kN/m" />
+                  </div>
+                  <Param label="Target Fb" value={prTargetFb} min={12} max={90} step={0.5} digits={1} unit="Hz" onChange={setPrTargetFb} hint="Wanted system tuning — the mass solver sets the PR moving mass so the cone-excursion notch lands here" />
+                  <div className="row">
+                    <Btn
+                      small
+                      variant="primary"
+                      onClick={() => patchPassive({ mass: Math.max(20, Math.round(prTune.massForFb(prTargetFb))) })}
+                      title="Solves Mpr = (K_box-air + K_suspension) / (2πFb)² and applies it"
+                    >
+                      Auto-tune mass → {prTargetFb.toFixed(0)} Hz
+                    </Btn>
+                  </div>
+                </>
+              ) : null}
+              {prExc ? (
+                <>
+                  <div className="readout-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 8 }}>
+                    <Readout k="PR stroke @ rated" v={prExc.peakPr.toFixed(1)} unit="mm" acc />
+                    <Readout k="Cone stroke @ rated" v={prExc.peakCone.toFixed(1)} unit="mm" />
+                    <Readout k="PR leverage" v={`×${prExc.leverage.toFixed(1)}`} acc />
+                    <Readout k="worst @" v={prExc.fAtPeak.toFixed(1)} unit="Hz" />
+                  </div>
+                  {prExc.peakPr > 25 ? (
+                    <div className="warnbox" style={{ marginTop: 6 }}>
+                      PR stroke {prExc.peakPr.toFixed(0)} mm at rated drive exceeds a typical ±25 mm PR limit —
+                      add moving mass, raise damping, or limit drive below Fb.
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </Section>
           ) : null}
 
@@ -252,6 +322,13 @@ export function EnclosureDesigner() {
                       <Readout k="L_eff (end corr.)" v={((res?.portLengthEff ?? 0) * 1000).toFixed(0)} unit="mm" badge={<Badge kind="est">EST</Badge>} />
                       <Readout k="Port air mass" v={((res?.portMass ?? 0) * 1000).toFixed(1)} unit="g" />
                       <Readout k="Port volume" v={res?.portVolumeL.toFixed(2) ?? '—'} unit="L" />
+                    </>
+                  ) : null}
+                  {enc.type === 'passiveRadiator' && res && res.prArea > 0 ? (
+                    <>
+                      <Readout k="PR area" v={(res.prArea * 1e4).toFixed(0)} unit="cm²" />
+                      <Readout k="PR moving mass" v={(res.prMass * 1000).toFixed(0)} unit="g" />
+                      <Readout k="PR damping Qmp" v={((2 * Math.PI * (res.Fb ?? 30) * res.prMass) / Math.max(0.05, res.prDamping)).toFixed(1)} unit="" />
                     </>
                   ) : null}
                 </div>

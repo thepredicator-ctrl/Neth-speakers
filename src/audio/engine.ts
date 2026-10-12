@@ -27,6 +27,7 @@ export interface EngineSnapshot {
   x: number;       // m displacement
   v: number;       // m/s
   i: number;       // A
+  prX: number;     // m port / passive-radiator displacement (0 for sealed/free-air)
   limit: boolean;  // excursion beyond Xmech
   clip: boolean;
   sync: 'ok' | 'stale' | 'idle';
@@ -97,6 +98,7 @@ export class AudioEngine {
   private vclip = 0;
   private ilim = 0;
   private xmech = 0.02;
+  private lastPrX = 0;
   private system: SystemModel | null = null;
   private systemN = 0;
 
@@ -209,6 +211,7 @@ export class AudioEngine {
           cv: this.system ? new Float64Array(this.system.cv) : [],
           ci: this.system ? new Float64Array(this.system.ci) : [],
           cp: this.system ? new Float64Array(this.system.cp) : [],
+          cpr: this.system && this.system.cpr ? new Float64Array(this.system.cpr) : [],
           vpeak: this.vpeak, vclip: this.vclip, ilim: this.ilim, xmech: this.xmech,
           acoustic: this.settings?.acousticOutput ?? false,
           acousticGain: 0.28,
@@ -234,6 +237,7 @@ export class AudioEngine {
     const n = Ad.length;
     const Adf = new Float64Array(Ad.flat());
     const Bdf = new Float64Array(Bd);
+    const cprf = this.system?.cpr ? new Float64Array(this.system.cpr) : null;
     const state = new Float64Array(n);
     const tmp = new Float64Array(n);
     sp.onaudioprocess = (ev) => {
@@ -248,6 +252,11 @@ export class AudioEngine {
           tmp[r] = acc;
         }
         state.set(tmp);
+        if (cprf && cprf.length === n) {
+          let pr = 0;
+          for (let c = 0; c < n; c++) pr += cprf[c] * state[c];
+          this.lastPrX = pr;
+        }
         this.sync.pushSample(state[1], state[2], this.ctx!.currentTime);
       }
     };
@@ -263,9 +272,10 @@ export class AudioEngine {
     if (this.scriptNode) { try { this.scriptNode.onaudioprocess = null; this.scriptNode.disconnect(); } catch { /* */ } this.scriptNode = null; }
   }
 
-  private onWorkletMsg(d: { x: number; v: number; i: number; t: number; limit: boolean; clip: boolean; ilim: boolean }): void {
+  private onWorkletMsg(d: { x: number; v: number; i: number; prX?: number; t: number; limit: boolean; clip: boolean; ilim: boolean }): void {
     if (!this.ctx) return;
     this.sync.pushSample(d.x, d.v, d.t);
+    this.lastPrX = d.prX ?? 0;
     // decimate into history (~1 sample per message)
     this.hist[this.histIdx] = d.x;
     this.histIdx = (this.histIdx + 1) % this.hist.length;
@@ -273,7 +283,7 @@ export class AudioEngine {
     if ((this.msgCount++ & 1) === 0 && this.onSnapshot) {
       const syncState: EngineSnapshot['sync'] =
         this.mode === 'none' ? 'idle' : (this.sync.healthy(this.ctx.currentTime) ? 'ok' : 'stale');
-      this.onSnapshot({ x: d.x, v: d.v, i: d.i, limit: d.limit, clip: d.clip || d.ilim, sync: syncState });
+      this.onSnapshot({ x: d.x, v: d.v, i: d.i, prX: this.lastPrX, limit: d.limit, clip: d.clip || d.ilim, sync: syncState });
     }
   }
 
@@ -295,6 +305,7 @@ export class AudioEngine {
         cv: new Float64Array(sys.cv),
         ci: new Float64Array(sys.ci),
         cp: new Float64Array(sys.cp),
+        cpr: new Float64Array(sys.cpr ?? []),
         vpeak: this.vpeak, reset: false,
       });
     } else if (this.workletReady || this.usingFallback) {
@@ -576,6 +587,14 @@ export class AudioEngine {
     if (!this.ctx) return 0;
     const x = this.sync.renderDisplacement(this.ctx.currentTime);
     return Math.min(this.xmech, Math.max(-this.xmech, x));
+  }
+
+  /** Latest port / passive-radiator displacement (m). Sign convention: the
+   *  model's x_pr is positive INTO the box, so the rear-mounted radiator's
+   *  outward bulge corresponds to NEGATIVE x_pr — the 3D scene maps this
+   *  directly onto +Y (toward the box interior) for the rear-wall PR. */
+  renderPrDisplacement(): number {
+    return this.lastPrX;
   }
 
   dispose(): void {

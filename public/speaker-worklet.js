@@ -28,6 +28,7 @@ class SpeakerProcessor extends AudioWorkletProcessor {
     this.cv = new Float64Array(o.cv || []); // velocity row (m/s)
     this.ci = new Float64Array(o.ci || []); // coil current row (A)
     this.cp = new Float64Array(o.cp || []); // far-field pressure row (Pa per volt·scale)
+    this.cpr = new Float64Array(o.cpr || []); // port / passive-radiator displacement row (m)
     this.state = new Float64Array(this.n);
     this.tmp = new Float64Array(this.n);
 
@@ -42,7 +43,7 @@ class SpeakerProcessor extends AudioWorkletProcessor {
     this.vIndex = o.vIndex != null ? o.vIndex : 2;
     this.iIndex = o.iIndex != null ? o.iIndex : 0;
 
-    this.lastX = 0; this.lastV = 0; this.lastI = 0;
+    this.lastX = 0; this.lastV = 0; this.lastI = 0; this.lastPrX = 0;
     this.hitLimit = false; this.clipFlag = false; this.iLimFlag = false;
     this.blockCount = 0;
     this.port.onmessage = (e) => this.onMsg(e.data);
@@ -58,6 +59,7 @@ class SpeakerProcessor extends AudioWorkletProcessor {
         if (d.cv) this.cv = new Float64Array(d.cv);
         if (d.ci) this.ci = new Float64Array(d.ci);
         if (d.cp) this.cp = new Float64Array(d.cp);
+        if (d.cpr) this.cpr = new Float64Array(d.cpr);
         if (d.vpeak != null) this.vpeak = d.vpeak;
         if (d.reset) this.state.fill(0);
       }
@@ -159,6 +161,10 @@ class SpeakerProcessor extends AudioWorkletProcessor {
         this.iLimFlag = true;
         cur = Math.sign(cur) * this.ilim;
       }
+      // Port / passive-radiator displacement (5-state systems only). The PR is
+      // a real mass-spring state in the model — report it so the 3D view can
+      // animate the radiator and the HUD can show its excursion.
+      this.lastPrX = this.cpr.length === this.n ? this.dot(this.cpr) : 0;
       this.lastX = x; this.lastV = this.dot(this.cv); this.lastI = cur;
       this.lastU = u; this.lastInCh = inCh ? inCh.length : -1;
 
@@ -176,7 +182,7 @@ class SpeakerProcessor extends AudioWorkletProcessor {
     }
     if ((this.blockCount++ & 3) === 0) {
       this.port.postMessage({
-        x: this.lastX, v: this.lastV, i: this.lastI,
+        x: this.lastX, v: this.lastV, i: this.lastI, prX: this.lastPrX,
         t: currentTime, limit: this.hitLimit,
         clip: this.clipFlag, ilim: this.iLimFlag,
       });

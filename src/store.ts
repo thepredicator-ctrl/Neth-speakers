@@ -205,7 +205,7 @@ export const useApp = create<AppState>((set, get) => {
     projectName: 'Untitled Design',
     currentProjectId: null,
     projects: [],
-    snapshot: { x: 0, v: 0, i: 0, limit: false, clip: false, sync: 'idle' },
+    snapshot: { x: 0, v: 0, i: 0, prX: 0, limit: false, clip: false, sync: 'idle' },
     workspace: 'dashboard',
     ampTouched: false,
     derived: computeDerived(defaultDriver(), defaultEnclosure(), defaultAmplifier(), materialFinder([])),

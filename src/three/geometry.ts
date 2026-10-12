@@ -1009,7 +1009,16 @@ function coneMatDef_color(p: DriverParams): string {
 /* ---------------------------------------------------------------------------
  * Enclosure (cutaway) geometry
  * ------------------------------------------------------------------------- */
-export interface EnclosureGeometry { group: THREE.Group; setWallOpacity(o: number): void; dispose(): void }
+export interface EnclosureGeometry {
+  group: THREE.Group;
+  setWallOpacity(o: number): void;
+  /** Move the passive radiator along its stroke (m, model x_pr convention:
+   *  positive = into the box). No-op for sealed/ported boxes. */
+  setPrDisplacement(m: number): void;
+  /** Visual travel clamp (m) — ± around rest. */
+  prTravel: number;
+  dispose(): void;
+}
 
 export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quality: 'low' | 'med' | 'high'): EnclosureGeometry {
   const group = new THREE.Group();
@@ -1079,16 +1088,66 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
     group.add(grilleRing);
   }
 
-  // passive radiator on the rear wall
+  // Passive radiator — a real moving assembly on the rear wall: recessed
+  // mount basket, half-roll rubber surround, composite piston and centre cap.
+  // It is driven every frame from the model's x_pr state via setPrDisplacement.
+  let prGroup: THREE.Group | null = null;
+  let prBaseY = 0;
+  let prTravel = 0;
   if (enc.type === 'passiveRadiator' && enc.passive.enabled) {
     const r = mm2m(enc.passive.diameter) / 2;
-    const pr = new THREE.Mesh(
-      new THREE.CylinderGeometry(r, r, mm2m(14), quality === 'low' ? 28 : 48, 1, false),
-      new THREE.MeshStandardMaterial({ color: '#1a1c20', roughness: 0.9 })
+    const rollR = Math.max(mm2m(6), r * 0.09);            // surround roll radius
+    prTravel = Math.max(mm2m(12), mm2m(enc.passive.diameter) * 0.16);
+    prGroup = new THREE.Group();
+    prBaseY = -D + t;
+
+    // recessed mount dish (like a stamped PR basket)
+    const dishMat = new THREE.MeshStandardMaterial({ color: '#23262c', roughness: 0.55, metalness: 0.35 });
+    const dish = new THREE.Mesh(
+      new THREE.CylinderGeometry(r + rollR * 1.6, r + rollR * 2.2, mm2m(8), quality === 'low' ? 32 : 56, 1, true),
+      dishMat,
     );
-    pr.rotation.x = Math.PI / 2;
-    pr.position.set(0, -D + t, 0);
-    group.add(pr);
+    dish.rotation.x = Math.PI / 2;
+    dish.position.y = prBaseY + mm2m(3);
+    prGroup.add(dish);
+    const mountRing = new THREE.Mesh(
+      new THREE.TorusGeometry(r + rollR * 2.0, mm2m(2.6), 10, quality === 'low' ? 32 : 56),
+      new THREE.MeshStandardMaterial({ color: '#191b1f', roughness: 0.7, metalness: 0.2 }),
+    );
+    mountRing.rotation.x = Math.PI / 2;
+    mountRing.position.y = prBaseY + mm2m(1.2);
+    prGroup.add(mountRing);
+
+    // moving sub-assembly: piston + surround + cap ride together on this group
+    const moving = new THREE.Group();
+    moving.position.y = 0;
+    const pistonMat = new THREE.MeshStandardMaterial({ color: '#141519', roughness: 0.85, metalness: 0.05 });
+    // shallow dished piston (aluminium/composite PR look)
+    const piston = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r, mm2m(7), quality === 'low' ? 32 : 56, 1, false),
+      pistonMat,
+    );
+    piston.rotation.x = Math.PI / 2;
+    piston.position.y = -mm2m(2.5);
+    moving.add(piston);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(r * 0.32, quality === 'low' ? 20 : 36, 14, 0, Math.PI * 2, 0, Math.PI / 2.6),
+      new THREE.MeshStandardMaterial({ color: '#1d2026', roughness: 0.5, metalness: 0.45 }),
+    );
+    dome.rotation.x = Math.PI;                          // dome points outward (−Y)
+    dome.position.y = -mm2m(6);
+    moving.add(dome);
+    // half-roll rubber surround joining the piston rim to the mount dish
+    const rollMat = new THREE.MeshStandardMaterial({ color: '#0e0f12', roughness: 0.95, metalness: 0 });
+    const roll = new THREE.Mesh(
+      new THREE.TorusGeometry(r + rollR * 0.4, rollR, quality === 'low' ? 10 : 16, quality === 'low' ? 32 : 60),
+      rollMat,
+    );
+    roll.rotation.x = Math.PI / 2;
+    roll.position.y = -mm2m(1);
+    moving.add(roll);
+    prGroup.add(moving);
+    group.add(prGroup);
   }
 
   // bracing
@@ -1103,6 +1162,10 @@ export function buildEnclosure(enc: EnclosureParams, driver: DriverParams, quali
   return {
     group,
     setWallOpacity(o: number) { wallMat.opacity = o; },
+    setPrDisplacement(m: number) {
+      if (prGroup) prGroup.position.y = prBaseY + Math.max(-prTravel, Math.min(prTravel, m));
+    },
+    prTravel,
     dispose() {
       group.traverse((o) => {
         const m = o as THREE.Mesh;

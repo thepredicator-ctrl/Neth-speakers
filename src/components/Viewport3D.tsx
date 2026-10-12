@@ -16,6 +16,11 @@ export function physicalDispMm(): number {
   return engine.renderDisplacement() * 1000;
 }
 
+/** Current physical port / passive-radiator displacement in mm. */
+export function physicalPrMm(): number {
+  return engine.renderPrDisplacement() * 1000;
+}
+
 export function Viewport3D(props: {
   showEnclosure?: boolean;
   wallOpacity?: number;
@@ -46,6 +51,7 @@ export function Viewport3D(props: {
     if (!ref.current) return;
     const scene = new SpeakerScene(ref.current, (id) => matsRef.current(id), {
       getDisplacement: () => engine.renderDisplacement(),
+      getPrDisplacement: () => engine.renderPrDisplacement(),
       showRestRing: true,
     });
     sceneRef.current = scene;

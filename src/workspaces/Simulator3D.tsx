@@ -1,9 +1,13 @@
 /* 3D Simulator — live physical cone motion, free-angle orbit, exploded/section, excursion HUD.
-   Side panel reorganised into four tabs: Drive · View · Motion · Stats. */
+   Side panel reorganised into four tabs: Drive · View · Motion · Stats.
+   The driver is tested IN ITS BOX by default: the cabinet (with port or
+   passive radiator) is rendered around the driver and the real-time model
+   runs the full sealed/ported/PR state-space, so tuning, unloading and PR
+   motion are all physical — never a canned animation. */
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../store';
-import { Viewport3D, physicalDispMm } from '../components/Viewport3D';
-import { Section, Btn, Param, Sel, Badge, XBar } from '../components/ui';
+import { Viewport3D, physicalDispMm, physicalPrMm } from '../components/Viewport3D';
+import { Section, Btn, Param, Sel, Badge, XBar, Toggle } from '../components/ui';
 import { useExcursionStats } from '../components/useExcursionStats';
 import { engine } from '../audio/engine';
 
@@ -25,19 +29,28 @@ export function Simulator3D() {
   const amplifier = useApp((s) => s.amplifier);
   const patchAmplifier = useApp((s) => s.patchAmplifier);
   const amp = useApp((s) => s.derived.amp);
+  const enclosure = useApp((s) => s.enclosure);
+  const encRes = useApp((s) => s.derived.encLitres);
   const [tab, setTab] = useState<TabId>('drive');
   const [recenterN, setRecenterN] = useState(0);
   const [exploded, setExploded] = useState(0);
   const [section, setSection] = useState<number | null>(null);
   const [quality, setQuality] = useState<'low' | 'med' | 'high'>('med');
-  const [live, setLive] = useState({ mm: 0, limit: false, fps: 0 });
+  const [showBox, setShowBox] = useState(true);        // test IN the box by default
+  const [boxOpacity, setBoxOpacity] = useState(0.18);  // wall transparency
+  const [live, setLive] = useState({ mm: 0, prMm: 0, limit: false, fps: 0 });
   const { stats: exc, reset: resetExc } = useExcursionStats();
   const rafRef = useRef(0);
+  const prPeakRef = useRef(0);
+  const prMinRef = useRef(0);
 
   // HUD refresh at ~30fps (React state), while the 3D itself runs at 60fps
   useEffect(() => {
     const tick = () => {
-      setLive({ mm: physicalDispMm(), limit: useApp.getState().snapshot.limit, fps: 0 });
+      const prMm = physicalPrMm();
+      if (prMm > prPeakRef.current) prPeakRef.current = prMm;
+      if (prMm < prMinRef.current) prMinRef.current = prMm;
+      setLive({ mm: physicalDispMm(), prMm, limit: useApp.getState().snapshot.limit, fps: 0 });
       rafRef.current = requestAnimationFrame(throttle30);
     };
     let last = 0;
@@ -55,6 +68,9 @@ export function Simulator3D() {
   const driver = useApp((s) => s.driver);
   const xmaxDrive = useApp((s) => s.derived.xmaxDriveW);
   const driveActive = live.mm !== 0;
+  const prActive = enclosure.type === 'passiveRadiator' && enclosure.passive.enabled;
+  const fb = encRes?.Fb ?? null;
+  const prP2p = prPeakRef.current - prMinRef.current;
 
   return (
     <div className="ws no-scroll" style={{ height: '100%' }}>
@@ -115,6 +131,18 @@ export function Simulator3D() {
                   ))}
                   <Btn small onClick={() => engine.stopTone()}>Stop</Btn>
                 </div>
+                {fb != null ? (
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <Btn
+                      small
+                      variant="primary"
+                      onClick={() => { void engine.ensure().then(() => engine.startTone(Math.max(5, Math.round(fb * 10) / 10), -3)); patchSim({ running: true, paused: false }); }}
+                      title="Plays a −3 dB tone at the box tuning frequency — the classic box test: near Fb the cone unload is at its deepest and the port/PR does the work"
+                    >
+                      Test at Fb {fb.toFixed(1)} Hz
+                    </Btn>
+                  </div>
+                ) : null}
                 <div className="row" style={{ marginTop: 8 }}>
                   <Btn small ghost onClick={() => { engine.setPlaybackRate(0.15); patchSim({ speed: 0.15 }); }}>Slow-mo 0.15×</Btn>
                   <Btn small ghost onClick={() => { engine.setPlaybackRate(1); patchSim({ speed: 1 }); }}>Real-time 1×</Btn>
@@ -138,6 +166,14 @@ export function Simulator3D() {
               </Section>
 
               <Section title="Visualization">
+                <Toggle
+                  label="Test in box" value={showBox}
+                  onChange={(v) => setShowBox(v)}
+                  hint="Render the cabinet around the driver. The REAL-TIME MODEL always includes the box (sealed/ported/PR) — this toggles the 3D cabinet view."
+                />
+                {showBox ? (
+                  <Param label="Wall transparency" value={1 - boxOpacity} min={0} max={0.95} step={0.01} digits={2} unit="" onChange={(v) => setBoxOpacity(1 - v)} />
+                ) : null}
                 <Param label="Exploded view" value={exploded} min={0} max={1} step={0.01} digits={2} onChange={setExploded} />
                 <Param label="Section angle" value={section ?? 0} min={0} max={180} step={1} digits={0} unit="°" onChange={(v) => setSection(v > 0 ? v : null)} hint="Cross-section clip plane; 0 = off" />
                 <Sel label="Quality" value={quality} options={[{ value: 'low', label: 'Low (mobile)' }, { value: 'med', label: 'Medium' }, { value: 'high', label: 'High' }]} onChange={(v) => setQuality(v as typeof quality)} />
@@ -198,12 +234,29 @@ export function Simulator3D() {
                 <Badge kind={exc.min <= 0 ? 'ok' : 'est'}>min {exc.min.toFixed(2)} mm</Badge>
                 <Btn small ghost onClick={resetExc}>Reset stats</Btn>
               </div>
+              {prActive ? (
+                <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  <Badge kind="est">PR now {live.prMm >= 0 ? '+' : ''}{live.prMm.toFixed(2)} mm</Badge>
+                  <Badge kind="est">PR PEAK {Math.max(Math.abs(prPeakRef.current), Math.abs(prMinRef.current)).toFixed(2)} mm</Badge>
+                  <Badge kind="est">PR TRAVEL p-p {prP2p.toFixed(2)} mm</Badge>
+                  <Btn small ghost onClick={() => { prPeakRef.current = 0; prMinRef.current = 0; }}>Reset PR</Btn>
+                </div>
+              ) : null}
               <p className="note">
                 Xmax {ts.Xmax.toFixed(1)} mm and Xmax p-p {ts.XmaxPP.toFixed(1)} mm are the LINEAR limits
                 (one-way / peak-to-peak); Vd = Sd·Xmax = {(ts.Vd * 1e6).toFixed(0)} cm³. Peak and travel above are
                 measured from the simulated displacement itself — never from an animation value.
               </p>
+              {prActive ? (
+                <p className="note">
+                  The passive radiator is a real mass-spring state in the model: near Fb it moves in
+                  ANTI-PHASE with the cone and takes most of the radiating area, which is why its stroke
+                  is several times the cone's at tuning.
+                </p>
+              ) : null}
               <div className="stat-rows">
+                {fb != null ? <div className="stat-row"><span>Box tuning Fb</span><b>{fb.toFixed(1)} Hz</b></div> : null}
+                <div className="stat-row"><span>Net box volume</span><b>{encRes ? `${encRes.VbEff.toFixed(1)} L eff` : '—'}</b></div>
                 <div className="stat-row"><span>Surround roll height</span><b>{driver.surround.rollHeight.toFixed(0)} mm</b></div>
                 <div className="stat-row"><span>Roll capability (one-way)</span><b>≈ {(driver.surround.rollHeight * 1.25).toFixed(0)} mm</b></div>
                 <div className="stat-row"><span>Mechanical limit ±Xmech</span><b>{ts.Xmech.toFixed(1)} mm</b></div>
@@ -214,7 +267,8 @@ export function Simulator3D() {
 
         <div className="main-area">
           <Viewport3D
-            showEnclosure={false}
+            showEnclosure={showBox}
+            wallOpacity={boxOpacity}
             viewRequest={{ v: 'recenter', n: recenterN }}
             exploded={exploded}
             section={section}
@@ -222,6 +276,8 @@ export function Simulator3D() {
             overlay={
               <>
                 <Badge kind={overMech ? 'warn' : overLimit ? 'warn' : 'ok'}>{overMech ? 'MECHANICAL LIMIT' : overLimit ? 'BEYOND Xmax' : 'WITHIN Xmax'}</Badge>
+                <Badge kind="est">{showBox ? `IN BOX · ${enclosure.type === 'passiveRadiator' ? 'PR' : enclosure.type}` : 'BOX HIDDEN'}</Badge>
+                {showBox && prActive ? <Badge kind={Math.abs(live.prMm) > enclosure.passive.diameter * 0.12 ? 'warn' : 'est'}>PR {live.prMm >= 0 ? '+' : ''}{live.prMm.toFixed(1)} mm</Badge> : null}
                 <Badge kind="est">DISPLAY {audio.vizMode === 'enhanced' ? `×${audio.vizMultiplier}` : '×1 (physical)'}</Badge>
               </>
             }
