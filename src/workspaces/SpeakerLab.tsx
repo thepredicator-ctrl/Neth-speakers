@@ -5,6 +5,7 @@ import { Section, Btn, Readout, Badge, Param, Sel } from '../components/ui';
 import { Plot } from '../components/Plot';
 import { Viewport3D } from '../components/Viewport3D';
 import { PRESETS } from '../physics/defaults';
+import type { ConeShape } from '../physics/shape';
 import { responseOverGrid, impedanceCurve } from '../physics/freqresp';
 import { logspace } from '../physics/units';
 
@@ -57,7 +58,17 @@ export function SpeakerLab() {
           </Section>
 
           <Section title="Quick Dimensions">
-            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat. Sd follows automatically: piston extends to half the surround roll." />
+            <Param label="Cone outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" digits={1} onChange={(v) => patchCone({ outerDiameter: v })} hint="Cone body at the surround seat (major axis for oval). Sd follows automatically from the real shaped piston area." />
+            <Sel
+              label="Cone shape"
+              value={driver.cone.shape}
+              options={[{ value: 'round', label: 'Round' }, { value: 'oval', label: 'Oval' }, { value: 'square', label: 'Square' }]}
+              onChange={(v) => patchCone({ shape: v as ConeShape })}
+              hint="Front-view piston shape. Oval = automotive 6×9 style ellipse, Square = rounded-square SPL sub style. The 3D model, Sd and SPL all follow the real shape."
+            />
+            {driver.cone.shape === 'oval' ? (
+              <Param label="Minor axis (oval)" value={driver.cone.minorDiameter} min={20} max={driver.cone.outerDiameter} unit="mm" digits={1} onChange={(v) => patchCone({ minorDiameter: v })} hint="Oval minor axis — Sd = π/4 × Dmajor × Dminor (effective piston), auto-tracked to the draw." />
+            ) : null}
             <Param label="Cone depth" value={driver.cone.depth} min={2} max={400} unit="mm" digits={1} onChange={(v) => patchCone({ depth: v })} />
             <Param label="Winding Ø" value={driver.coil.windingDiameter} min={8} max={620} unit="mm" digits={1} onChange={(v) => patchCoil({ windingDiameter: v })} />
             <Param label="Gap height" value={driver.magnet.topPlateThickness} min={1} max={100} unit="mm" digits={1} onChange={(v) => patchMagnet({ topPlateThickness: v })} />

@@ -19,6 +19,7 @@ import type {
   ConeParams, SurroundParams, SpiderParams, VoiceCoilParams, MagnetParams, FrameParams,
 } from './types';
 import { computeLayout, minFormerHeightM } from './layout';
+import { SHAPES, equivalentDiameterMm } from './shape';
 
 /* ------------------------------------------------------------------ */
 /* primitive helpers                                                   */
@@ -63,11 +64,15 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 export function sanitizeCone(c: ConeParams): ConeParams {
   // NO artificial ceiling: outer Ø to 2 m (crazy SPL walls), depth to 400 mm
   const outer = num(c.outerDiameter, 25, 2000, 220);
+  const shape = str((c as { shape?: unknown }).shape, SHAPES, 'round');
   return {
     ...c,
     outerDiameter: outer,
+    shape,
+    // oval minor axis can never exceed the major axis; unused for round/square
+    minorDiameter: clamp(num(c.minorDiameter, 20, outer, outer * 0.72), 20, outer),
     // effective radiating diameter is AUTO-TRACKED in sanitizeDriver
-    // (cone body + half the surround roll); this clamp is a defensive bound.
+    // (shaped piston area → round-equivalent); this clamp is a defensive bound.
     effectiveDiameter: clamp(num(c.effectiveDiameter, outer * 0.4, outer * 1.5, outer), 12, 2000),
     depth: num(c.depth, 2, 400, 34),
     angleDeg: num(c.angleDeg, 5, 89, 65),
@@ -271,9 +276,14 @@ export function sanitizeDriver(d: DriverParams): DriverParams {
 
   // AUTO-BALANCE: the effective radiating diameter is DERIVED from the drawn
   // geometry — cone body + half the surround roll (piston extends to the
-  // middle of the surround). Sd can never contradict the 3D model.
+  // middle of the surround), mapped through the SHAPE (round/oval/square) to
+  // the round-equivalent diameter of the real piston area. Sd can never
+  // contradict the 3D model, and an oval 6×9 or a square 15" keeps the SPL
+  // of its true radiating area.
+  const d1Eff = cone.outerDiameter + surround.rollWidth;
+  const d2Eff = cone.minorDiameter + surround.rollWidth;
   cone.effectiveDiameter = clamp(
-    cone.outerDiameter + surround.rollWidth,
+    equivalentDiameterMm(cone.shape, d1Eff, d2Eff),
     cone.outerDiameter * 0.5,
     cone.outerDiameter * 1.5,
   );
@@ -349,6 +359,7 @@ export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): Enclosur
     num(e.passive.diameter, 30, Math.max(30, Math.min(W, H) * 0.95), 220),
     30, 1500,
   );
+  const prShape = str((e.passive as { shape?: unknown }).shape, SHAPES, 'round');
   return {
     ...e,
     type: str(e.type, ['sealed', 'ported', 'passiveRadiator'] as const, 'sealed'),
@@ -372,6 +383,11 @@ export function sanitizeEnclosure(e: EnclosureParams, d: DriverParams): Enclosur
       ...e.passive,
       enabled: e.passive.enabled === true,
       diameter: prDia,
+      shape: prShape,
+      minorDiameter: clamp(
+        num((e.passive as { minorDiameter?: unknown }).minorDiameter, 20, prDia, prDia * 0.72),
+        20, prDia,
+      ),
       count: int(e.passive.count, 1, 4, 1),
       mass: num(e.passive.mass, 5, 20000, 220),
       suspensionStiffness: num(e.passive.suspensionStiffness, 10, 100000, 350),

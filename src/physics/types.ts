@@ -3,6 +3,10 @@
  * All SI units internally (m, kg, s, N, V, A, T). UI units converted at the edge.
  */
 
+import type { ConeShape } from './shape';
+
+export type { ConeShape } from './shape';
+
 export type ValueSource = 'calculated' | 'user';
 
 /** A parameter that the user may override; null/undefined = use calculated estimate. */
@@ -10,7 +14,9 @@ export type Overridable = number | null;
 
 export interface ConeParams {
   outerDiameter: number;      // mm — cone body outer diameter at surround seat
-  effectiveDiameter: number;  // mm — effective radiating diameter (drives Sd)
+  shape: ConeShape;           // round | oval | square — front-view piston shape
+  minorDiameter: number;      // mm — oval minor axis (≤ outerDiameter; ignored otherwise)
+  effectiveDiameter: number;  // mm — round-equivalent radiating diameter (drives Sd)
   depth: number;              // mm — axial depth from surround seat to voice-coil junction
   angleDeg: number;           // deg — included side angle (derived from depth; edit re-syncs depth)
   thickness: number;          // mm
@@ -134,7 +140,9 @@ export interface EnclosurePort {
 
 export interface EnclosurePassiveRadiator {
   enabled: boolean;
-  diameter: number;   // mm — effective radiating diameter (PER radiator)
+  diameter: number;   // mm — major-axis radiating Ø (PER radiator)
+  shape: ConeShape;   // round | oval | square — matches the shaped PR option
+  minorDiameter: number; // mm — oval minor axis (≤ diameter; ignored otherwise)
   count?: number;     // identical PRs mounted on the cabinet side walls (1–4, default 1)
   mass: number;       // g — moving mass (PER radiator)
   suspensionStiffness: number; // N/m (per radiator)

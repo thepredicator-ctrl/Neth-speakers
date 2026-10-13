@@ -10,6 +10,7 @@ import { buildSystem, wiringInfo } from '../physics/stateSpace';
 import { logspace, C_SOUND, RHO0 } from '../physics/units';
 import { computeAmp } from '../physics/amplifier';
 import { optimizeAlignment, autoPort, portFlowAtFb, type AlignSolution } from '../physics/analysis';
+import type { ConeShape } from '../physics/shape';
 
 export function EnclosureDesigner() {
   const driver = useApp((s) => s.driver);
@@ -243,7 +244,11 @@ export function EnclosureDesigner() {
             <Section title="Passive Radiator">
               <Param label="Enabled" value={enc.passive.enabled ? 1 : 0} min={0} max={1} step={1} digits={0} unit="" onChange={(v) => patchPassive({ enabled: v > 0.5 })} />
               <Param label="Radiator count" value={prCount} min={1} max={4} step={1} digits={0} unit="×" onChange={(v) => patchPassive({ count: Math.round(v) })} hint="Identical PRs mounted on the cabinet SIDE walls — 1 right side · 2 one per side · 3 sides + rear · 4 two per side. Areas and masses add, so the auto-tune mass is PER radiator." />
-              <Param label="Effective Ø (each)" value={enc.passive.diameter} min={60} max={450} unit="mm" onChange={(v) => patchPassive({ diameter: v })} />
+              <Sel label="Radiator shape" value={enc.passive.shape} options={[{ value: 'round', label: 'Round' }, { value: 'oval', label: 'Oval' }, { value: 'square', label: 'Square' }]} onChange={(v) => patchPassive({ shape: v as ConeShape })} hint="Front-view shape of the passive radiator — oval (6×9 class) and square (SPL sub class) pistons are drawn as the real shape and their AREA is used by the tuning physics." />
+              {enc.passive.shape === 'oval' ? (
+                <Param label="Minor axis (oval)" value={enc.passive.minorDiameter} min={20} max={enc.passive.diameter} unit="mm" onChange={(v) => patchPassive({ minorDiameter: v })} hint="Oval minor axis — area = π/4 × Dmajor × Dminor per radiator." />
+              ) : null}
+              <Param label="Major Ø (each)" value={enc.passive.diameter} min={60} max={450} unit="mm" onChange={(v) => patchPassive({ diameter: v })} hint="Major axis for oval, side for square, diameter for round." />
               <Param label="Moving mass (each)" value={enc.passive.mass} min={20} max={20000} step={5} digits={0} unit="g" badge="user" onChange={(v) => patchPassive({ mass: v })} />
               <Param label="Suspension stiffness (each)" value={enc.passive.suspensionStiffness} min={0} max={3000} step={10} digits={0} unit="N/m" onChange={(v) => patchPassive({ suspensionStiffness: v })} />
               <Param label="Damping (each)" value={enc.passive.damping} min={0.05} max={6} step={0.05} digits={2} unit="N·s/m" onChange={(v) => patchPassive({ damping: v })} />

@@ -84,6 +84,15 @@ describe('buildDriver headless smoke', () => {
       d.frame.gasket = false; d.frame.boot = false; d.frame.tinselLeads = 4;
       d.surround.rollHeight = 12;
     }],
+    ['oval 6×9-style piston', (d) => {
+      d.cone.shape = 'oval'; d.cone.outerDiameter = 230; d.cone.minorDiameter = 150;
+      d.cone.depth = 40; d.surround.rollHeight = 18; d.surround.rollWidth = 18;
+    }],
+    ['square SPL-style piston, tall roll', (d) => {
+      d.cone.shape = 'square'; d.cone.outerDiameter = 380; d.cone.depth = 80;
+      d.surround.rollHeight = 40; d.surround.rollWidth = 30;
+      d.frame.style = 'diecast'; d.frame.boot = true;
+    }],
   ];
 
   for (const [name, tune] of configs) {
@@ -120,7 +129,7 @@ function prEnclosure(count: number, height = 620): EnclosureParams {
     ...base,
     type: 'passiveRadiator',
     internalWidth: 520, internalHeight: height, internalDepth: 460,
-    passive: { enabled: true, diameter: 330, count, mass: 420, suspensionStiffness: 280, damping: 1.6 },
+    passive: { ...base.passive, enabled: true, diameter: 330, count, mass: 420, suspensionStiffness: 280, damping: 1.6 },
   }, sanitizeDriver(base0()));
 }
 

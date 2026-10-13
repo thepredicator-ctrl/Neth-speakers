@@ -8,6 +8,7 @@ import { computeTS } from '../physics/tsp';
 import { buildSystem, wiringInfo } from '../physics/stateSpace';
 import { logspace } from '../physics/units';
 import { MATERIALS } from '../physics/materials';
+import { pistonAreaMm2 } from '../physics/shape';
 import { f3OfCurve, groupDelayMs } from '../physics/analysis';
 import type { DriverParams, EnclosureParams } from '../physics/types';
 import type { ProjectRecord } from '../storage/project';
@@ -67,7 +68,8 @@ export function Results() {
         const ts = computeTS(s.driver, mats);
         const encRes = (() => {
           const driverVolL = (Math.PI / 4) * Math.pow((s.driver.magnet.diameter / 1000), 2) * ((s.driver.magnet.thickness + s.driver.magnet.backPlateThickness) / 1000) * 1000
-            + (Math.PI / 4) * Math.pow((s.driver.cone.outerDiameter / 1000), 2) * ((s.driver.frame.depth * 0.45) / 1000) * 1000 * 0.35;
+            + pistonAreaMm2(s.driver.cone.shape, s.driver.cone.outerDiameter, s.driver.cone.minorDiameter) * 1e-6
+              * ((s.driver.frame.depth * 0.45) / 1000) * 1000 * 0.35;
           return computeEnclosure(s.enclosure, ts, driverVolL);
         })();
         const sys = buildSystem({

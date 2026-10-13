@@ -4,6 +4,7 @@ import { useApp } from '../store';
 import { Section, Btn, Param, Sel, Badge, Readout, Toggle } from '../components/ui';
 import { Viewport3D } from '../components/Viewport3D';
 import { MATERIALS } from '../physics/materials';
+import type { ConeShape } from '../physics/shape';
 import { fmtSI, mm2m, g2kg } from '../physics/units';
 import type { MaterialDef } from '../physics/types';
 
@@ -52,8 +53,12 @@ export function PartsEditor() {
 
           {part === 'cone' ? (
             <Section title="Cone Diaphragm">
-              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} />
-              <div className="note mono" style={{ margin: '2px 0 6px' }}>Effective radiating Ø (auto): {driver.cone.effectiveDiameter.toFixed(1)} mm = cone {driver.cone.outerDiameter.toFixed(1)} + ½×{driver.surround.rollWidth.toFixed(1)} roll — drives Sd</div>
+              <Param label="Outer Ø" value={driver.cone.outerDiameter} min={20} max={2000} unit="mm" onChange={(v) => patch.cone({ outerDiameter: v })} hint="Major axis for an oval cone, side length for a square cone." />
+              <Sel label="Shape" value={driver.cone.shape} options={[{ value: 'round', label: 'Round' }, { value: 'oval', label: 'Oval' }, { value: 'square', label: 'Square' }]} onChange={(v) => patch.cone({ shape: v as ConeShape })} hint="Front-view piston shape — the 3D cone, surround, dust dome and frame all follow, and Sd uses the real shaped piston area." />
+              {driver.cone.shape === 'oval' ? (
+                <Param label="Minor axis (oval)" value={driver.cone.minorDiameter} min={20} max={driver.cone.outerDiameter} unit="mm" onChange={(v) => patch.cone({ minorDiameter: v })} hint="Oval minor axis — e.g. a 6×9 in: outer 230 × minor 150." />
+              ) : null}
+              <div className="note mono" style={{ margin: '2px 0 6px' }}>Effective radiating Ø (auto): {driver.cone.effectiveDiameter.toFixed(1)} mm — round-equivalent of the shaped piston (cone {driver.cone.outerDiameter.toFixed(1)} + ½×{driver.surround.rollWidth.toFixed(1)} roll) — drives Sd</div>
               <Param label="Depth" value={driver.cone.depth} min={2} max={400} unit="mm" onChange={(v) => patch.cone({ depth: v })} />
               <Param label="Side angle (derived)" value={driver.cone.angleDeg} min={5} max={89} unit="°" badge="est" onChange={(v) => patch.cone({ depth: Math.max(2, (driver.cone.outerDiameter / 2 - 25) / Math.tan((v * Math.PI) / 180)) })} />
               <Param label="Thickness" value={driver.cone.thickness} min={0.1} max={20} step={0.05} digits={2} unit="mm" onChange={(v) => patch.cone({ thickness: v })} />

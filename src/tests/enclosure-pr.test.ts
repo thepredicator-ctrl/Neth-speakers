@@ -33,6 +33,7 @@ function prBox(overrides: Partial<EnclosureParams['passive']> = {}): EnclosurePa
     internalHeight: 520,
     internalDepth: 400,
     passive: {
+      ...defaultEnclosure().passive,
       enabled: true,
       diameter: 250,
       mass: 350,

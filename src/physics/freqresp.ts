@@ -11,6 +11,7 @@ import type { EnclosureParams, TSParams } from './types';
 import { cplx, cmul, cdiv, csub, cabs, carg, type Cx } from './linalg';
 import { RHO0, C_SOUND, mm2m, L2m3 } from './units';
 import { buildSystem, zohDiscretize, type WiringInfo } from './stateSpace';
+import { pistonAreaMm2 } from './shape';
 
 export interface FreqCurve {
   f: number[];        // Hz
@@ -242,8 +243,14 @@ export function computeEnclosure(
   const nPr = enc.passive.enabled && enc.type === 'passiveRadiator'
     ? Math.max(1, Math.min(4, Math.round(Number(enc.passive.count) || 1)))
     : 0;
+  // shaped PRs (oval / square): area from the real radiating face, dish depth
+  // from the major axis — the round-equivalent keeps every formula identical
+  const prShape = (enc.passive as { shape?: 'round' | 'oval' | 'square' }).shape ?? 'round';
+  const prA2 = nPr > 0
+    ? pistonAreaMm2(prShape, enc.passive.diameter, enc.passive.minorDiameter)
+    : 0;
   const prV = nPr > 0
-    ? Math.max(0.05, 0.35 * (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 3) * 1e3) * nPr
+    ? Math.max(0.05, 0.35 * prA2 * 1e-6 * mm2m(enc.passive.diameter) * 1e3) * nPr
     : 0;
   const subtractPort = enc.type === 'ported' ? portV : 0;
   const subtractPr = enc.type === 'passiveRadiator' ? prV : 0;
@@ -277,7 +284,7 @@ export function computeEnclosure(
   // stiffnesses and damping add (common displacement x_pr).
   let prArea = 0, prMass = 0, prStiffness = 0, prDamping = 0.8;
   if (enc.type === 'passiveRadiator' && enc.passive.enabled) {
-    prArea = nPr * (Math.PI / 4) * Math.pow(mm2m(enc.passive.diameter), 2);
+    prArea = nPr * prA2 * 1e-6;   // mm² → m², shape-aware
     prMass = nPr * Math.max(1e-3, enc.passive.mass * 1e-3);
     prStiffness = nPr * Math.max(0, enc.passive.suspensionStiffness);
     prDamping = nPr * Math.max(0.05, enc.passive.damping);

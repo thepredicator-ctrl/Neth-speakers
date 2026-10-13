@@ -9,7 +9,9 @@ export function defaultDriver(): DriverParams {
   return {
     cone: {
       outerDiameter: 160,        // 8" class cone body at the surround seat
-      effectiveDiameter: 173,    // auto: cone body + ½ surround roll (Sd source)
+      shape: 'round',            // round | oval | square front-view piston
+      minorDiameter: 160,        // oval minor axis (== major for round)
+      effectiveDiameter: 173,    // auto: piston area incl. ½ surround roll (Sd source)
       depth: 30,
       angleDeg: 65,
       thickness: 0.9,
@@ -118,6 +120,8 @@ export function defaultEnclosure(): EnclosureParams {
     passive: {
       enabled: false,
       diameter: 220,
+      shape: 'round',
+      minorDiameter: 220,
       count: 1,
       mass: 220,          // g
       suspensionStiffness: 350,
@@ -442,7 +446,7 @@ export const PRESETS: PresetDef[] = [
     },
     enclosure: {
       type: 'passiveRadiator', internalWidth: 520, internalHeight: 620, internalDepth: 460,
-      passive: { enabled: true, diameter: 330, count: 1, mass: 420, suspensionStiffness: 280, damping: 1.6 },
+      passive: { enabled: true, diameter: 330, shape: 'round', minorDiameter: 330, count: 1, mass: 420, suspensionStiffness: 280, damping: 1.6 },
       damping: 'heavyFill', bracingVolume: 1.6,
     },
   },
